@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bubbles</title>
+  <meta name="description" content="Real-time chat with your friends.">
+  <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    try { const t = localStorage.getItem('bubbles.theme'); if (t && t !== 'system') document.documentElement.dataset.theme = t;
+          const a = localStorage.getItem('bubbles.accent'); if (a) document.documentElement.style.setProperty('--accent', a); } catch {}
+  </script>
+  <script src="firebase-config.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div id="boot" class="screen"><div class="boot-logo"></div></div>
+
+  <section id="setup" class="screen" hidden>
+    <div class="card">
+      <div class="logo-big"></div>
+      <h1>Almost there</h1>
+      <p class="muted">Bubbles needs a Firebase project to sync messages in real time.</p>
+      <ol class="steps">
+        <li>Create a project at <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a>.</li>
+        <li>Add a <b>Web app</b> and copy its config.</li>
+        <li>Paste it into <code>firebase-config.js</code> and push to GitHub.</li>
+      </ol>
+      <p class="muted small">The full checklist is in the README.</p>
+    </div>
+  </section>
+
+  <section id="auth" class="screen" hidden>
+    <form class="card stack" id="authForm" novalidate>
+      <div class="logo-big"></div>
+      <h1 id="authTitle">Bubbles</h1>
+      <p class="muted" id="authSub">Sign in to chat with your friends.</p>
+      <label class="field" id="authNameRow" hidden>Display name
+        <input id="authName" maxlength="32" autocomplete="nickname" placeholder="What friends see">
+      </label>
+      <label class="field">Username
+        <span class="at-input"><span>@</span><input id="authUser" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false" required></span>
+      </label>
+      <label class="field">Password
+        <input type="password" id="authPass" autocomplete="current-password" minlength="6" required>
+      </label>
+      <label class="field" id="authPass2Row" hidden>Confirm password
+        <input type="password" id="authPass2" autocomplete="new-password" minlength="6">
+      </label>
+      <p class="hint" id="authHint" hidden>Usernames are 3–20 characters: lowercase letters, numbers and _. No email needed — just don't forget your password.</p>
+      <button class="btn btn-primary" type="submit" id="authSubmit">Sign In</button>
+      <p class="form-err" id="authErr" role="alert"></p>
+      <p class="auth-alt"><span id="authAltText">New here?</span> <button class="link" id="authToggle" type="button">Create an account</button></p>
+    </form>
+  </section>
+
+  <section id="onboard" class="screen" hidden>
+    <form class="card stack" id="onboardForm">
+      <h1>Finish setting up</h1>
+      <p class="muted">Pick the name your friends will see.</p>
+      <label class="field">Display name<input id="obName" maxlength="32" required></label>
+      <p class="hint">Your username is <b id="obUser"></b></p>
+      <button class="btn btn-primary" type="submit">Continue</button>
+      <p class="form-err" id="obErr" role="alert"></p>
+      <button class="link" type="button" id="obSignOut">Sign out</button>
+    </form>
+  </section>
+
+  <div id="app" hidden>
+    <nav id="rail" class="rail" aria-label="Servers"></nav>
+    <aside id="sidebar" class="sidebar">
+      <header class="sb-head">
+        <h1>Messages</h1>
+        <button class="icon-btn" data-act="compose" title="New message" data-icon="compose"></button>
+      </header>
+      <div class="sb-search">
+        <span class="sb-search-ic" data-icon="search"></span>
+        <input id="search" type="search" placeholder="Search" autocomplete="off">
+      </div>
+      <div id="notifBanner"></div>
+      <div id="chatList" class="chat-list"></div>
+      <div id="userPanel" class="user-panel"></div>
+    </aside>
+    <main id="main" class="main"></main>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div id="menuRoot"></div>
+  <div id="toastRoot" class="toast-root" aria-live="polite"></div>
+</body>
+</html>

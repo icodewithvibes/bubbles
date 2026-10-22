@@ -1,0 +1,109 @@
+rules_version = '2';
+
+// Who can read/write what. Publish these in Firebase console → Firestore → Rules,
+// or with `firebase deploy --only firestore:rules`.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    // ---------- profiles ----------
+    match /users/{uid} {
+      allow read: if signedIn();
+      // The username on a profile must be one this user actually owns in /usernames.
+      allow create: if signedIn() && me() == uid
+        && getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.username)).data.uid == uid;
+      allow update: if signedIn() && me() == uid
+        && request.resource.data.username == resource.data.username;
+
+      // Push tokens, read only by the Cloud Function (admin) and the owner.
+      match /tokens/{token} {
+        allow read, write: if signedIn() && me() == uid;
+      }
+    }
+
+    // username → uid lookup for "Add Friend". Usernames are permanent.
+    match /usernames/{name} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && name.matches('^[a-z0-9_]{3,20}$')
+        && request.resource.data.uid == me()
+        && request.auth.token.email == name + '@bubbles.example.com';
+      allow update, delete: if false;
+    }
+
+    // ---------- friends ----------
+    // One doc per pair, id = "<smaller uid>_<larger uid>". status: pending | accepted.
+    match /friendRequests/{relId} {
+      allow read: if signedIn() && (resource == null || me() in resource.data.participants);
+      allow create: if signedIn()
+        && request.resource.data.from == me()
+        && request.resource.data.to != me()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.participants.size() == 2
+        && request.resource.data.participants.hasAll([request.resource.data.from, request.resource.data.to])
+        && request.resource.data.participants[0] < request.resource.data.participants[1]
+        && relId == request.resource.data.participants[0] + '_' + request.resource.data.participants[1];
+      // Only the recipient can accept.
+      allow update: if signedIn()
+        && resource.data.to == me() && resource.data.status == 'pending'
+        && request.resource.data.status == 'accepted'
+        && changed().hasOnly(['status', 'acceptedAt']);
+      // Decline, cancel, or unfriend.
+      allow delete: if signedIn() && me() in resource.data.participants;
+    }
+
+    // ---------- conversations ----------
+    function areFriends(pair) {
+      let rel = /databases/$(database)/documents/friendRequests/$(pair);
+      return exists(rel) && get(rel).data.status == 'accepted';
+    }
+
+    match /chats/{chatId} {
+      allow read: if signedIn() && (resource == null || me() in resource.data.members);
+      allow create: if signedIn()
+        && me() in request.resource.data.members
+        && request.resource.data.members.size() >= 2
+        && request.resource.data.members.size() <= 50
+        && (
+          request.resource.data.type == 'group'
+          || (request.resource.data.type == 'dm'
+              && request.resource.data.members.size() == 2
+              && chatId == 'dm_' + request.resource.data.members[0] + '_' + request.resource.data.members[1]
+              && request.resource.data.members[0] < request.resource.data.members[1]
+              && areFriends(request.resource.data.members[0] + '_' + request.resource.data.members[1]))
+        );
+      // Members can update last message, read receipts, typing, name.
+      // Only groups can change membership.
+      allow update: if signedIn()
+        && me() in resource.data.members
+        && request.resource.data.type == resource.data.type
+        && (resource.data.type == 'group' || !changed().hasAny(['members']));
+
+      match /messages/{msgId} {
+        function chatAfter() { return getAfter(/databases/$(database)/documents/chats/$(chatId)).data; }
+        function chatNow() { return get(/databases/$(database)/documents/chats/$(chatId)).data; }
+
+        allow read: if signedIn() && me() in chatNow().members;
+        allow create: if signedIn()
+          && me() in chatAfter().members
+          && request.resource.data.senderId == me()
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.keys().hasOnly(['senderId', 'createdAt', 'text', 'image', 'replyTo', 'system', 'urgent'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 4000
+          && (!('image' in request.resource.data) || (request.resource.data.image is string && request.resource.data.image.size() < 900000));
+        allow update: if signedIn() && me() in chatNow().members && (
+          // Sender edits or unsends.
+          (resource.data.senderId == me()
+            && changed().hasOnly(['text', 'edited', 'editedAt', 'deleted', 'image']))
+          // Anyone in the chat changes only their own reaction.
+          || (changed().hasOnly(['reactions'])
+            && request.resource.data.reactions.diff(resource.data.get('reactions', {})).affectedKeys().hasOnly([me()]))
+        );
+        allow delete: if false;
+      }
+    }
+  }
+}
