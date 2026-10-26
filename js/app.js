@@ -1977,7 +1977,14 @@ function bindGlobalEvents() {
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('focus', () => { maybeMarkRead(); onVisibility(); });
   window.addEventListener('pagehide', () => { if (S.uid) F.updateDoc(userRef(S.uid), { state: 'offline' }).catch(() => {}); });
-  window.addEventListener('resize', () => closeMenu());
+  // Only a width change moves anchors. Phones change height whenever the keyboard or address bar
+  // slides in or out, which would close a menu the moment it is used.
+  let lastWidth = innerWidth;
+  window.addEventListener('resize', () => {
+    if (innerWidth === lastWidth) return;
+    lastWidth = innerWidth;
+    closeMenu();
+  });
   navigator.serviceWorker?.addEventListener('message', (e) => {
     if (e.data?.type === 'open-chat') location.hash = `#/chat/${e.data.chatId}`;
   });

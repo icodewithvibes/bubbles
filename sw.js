@@ -1,6 +1,6 @@
 /* Service worker: makes Bubbles installable, keeps the app shell available offline,
    and shows push notifications while the app is closed. */
-const CACHE = 'bubbles-v4';
+const CACHE = 'bubbles-v5';
 const SHELL = [
   './', './index.html', './css/style.css', './firebase-config.js', './manifest.webmanifest',
   './js/app.js', './js/firebase.js', './js/gifs.js', './js/notify.js', './js/util.js',
@@ -25,7 +25,8 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   e.respondWith((async () => {
     try {
-      const res = await fetch(req);
+      // GitHub Pages lets browsers reuse files for 10 minutes; revalidate so a push shows up on reopen.
+      const res = await fetch(req, { cache: 'no-cache' });
       if (res.ok) caches.open(CACHE).then((c) => c.put(req, res.clone()));
       return res;
     } catch {
