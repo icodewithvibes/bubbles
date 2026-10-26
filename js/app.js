@@ -1783,6 +1783,9 @@ function openGifPicker(anchor) {
   body.addEventListener('click', (e) => {
     const t = e.target.closest('[data-gif], [data-cat], [data-back]');
     if (!t) return;
+    // Re-rendering detaches the clicked tile, which the document's click-outside check would read as
+    // a click outside the picker and close it.
+    e.stopPropagation();
     if (t.dataset.gif) { closeMenu(); sendGif(gifUrl(t.dataset.gif)); return; }
     if (t.dataset.cat) category(GIF_CATEGORIES[+t.dataset.cat]);
     else { search.value = ''; home(); }
