@@ -5,6 +5,7 @@ import {
   compressImage, I, logo, PRESENCE_LABEL,
 } from './util.js';
 import { GIF_CATEGORIES } from './gifs.js';
+import { initCalls, stopCalls, startCall, inCall } from './call.js';
 
 const { auth, db } = F;
 
@@ -55,8 +56,8 @@ const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 const EMOJI_PICKER_URL = 'https://cdn.jsdelivr.net/npm/emoji-picker-element@1.29.1/index.js';
 
 // Bump APP_VERSION and rewrite PATCH_NOTES to show everyone a "What's new" popup once.
-const APP_VERSION = '1.3';
-const PATCH_INTRO = 'Since Yuriel Is A GOAT he decided to add working gifs';
+const APP_VERSION = '1.4';
+const PATCH_INTRO = 'Since Yuriel Is A GOAT he decided to add video calls with live captions';
 // Optional poll shown in the popup. Votes live in polls/<id>/votes/<uid>; use a new id for a new poll.
 const PATCH_POLL = {
   id: 'goat-1',
@@ -64,9 +65,9 @@ const PATCH_POLL = {
   options: ['🐐 A little GOAT', '🐐🐐 Pretty big GOAT', '🐐🐐🐐 Huge GOAT', '🐐🐐🐐🐐 Biggest GOAT ever'],
 };
 const PATCH_NOTES = [
-  { icon: '🎬', title: 'GIFs', text: 'Tap <b>GIF</b> next to the message box to pick from hundreds of GIFs. Browse categories like LOL, Hug and Bruh, or search for things like "thanks" or "dance".' },
-  { icon: '✨', title: 'Your own GIFs move', text: 'GIF files you send with <b>+</b>, paste or drag in now play instead of freezing on the first frame.' },
-  { icon: '🔄', title: 'Automatic updates', text: 'Bubbles now refreshes itself when there\'s an update, so you always have the newest version. It waits if you\'re in the middle of typing.' },
+  { icon: '📹', title: 'Video calls', text: 'Open a chat with a friend and tap the <b>camera</b> at the top right to call them. They need Bubbles open to hear it ring.' },
+  { icon: '💬', title: 'Live captions', text: 'What each person says shows up as words at the bottom of the call, so you can follow along even with your sound off. Tap <b>CC</b> to hide or show them. Works best in Chrome or Edge.' },
+  { icon: '🎬', title: 'GIFs', text: 'Tap <b>GIF</b> next to the message box to pick from hundreds of GIFs.' },
 ];
 
 const pairId = (a, b) => [a, b].sort().join('_');
@@ -129,7 +130,7 @@ async function checkForUpdate() {
 // Never throw away a half-typed message or a dialog/menu someone is using; the next check retries.
 function reloadWhenIdle() {
   const typing = [...$$('input, textarea')].some((el) => el.offsetParent && el.type !== 'checkbox' && el.value.trim());
-  if (typing || $('#modalRoot').children.length || $('#menuRoot').children.length) return;
+  if (typing || inCall() || $('#modalRoot').children.length || $('#menuRoot').children.length) return;
   location.reload();
 }
 
@@ -273,6 +274,10 @@ function startApp() {
     onRels, onListenError,
   ));
   startPresence();
+  initCalls({
+    uid: S.uid, user, toast,
+    onLog: (chatId, text) => { const c = S.chats.get(chatId); if (c) postMessage(c, { system: true, text }); },
+  });
   // Re-evaluate "online"/typing freshness and DND expiry without new data.
   S.timers.push(setInterval(() => { render('nav', 'header', 'friends'); renderTyping(); }, 30e3));
   S.timers.push(setInterval(renderTyping, 1000));
@@ -286,6 +291,7 @@ function teardown() {
   S.msgUnsub?.();
   S.wallUnsub?.();
   stopPoll();
+  stopCalls();
   Object.assign(S, {
     started: false, wall: null, wallUnsub: null, me: null, unsubs: [], timers: [], userUnsubs: new Map(), users: new Map(),
     chats: new Map(), rels: new Map(), chatsLoaded: false, msgUnsub: null, msgChatId: null, msgs: [],
@@ -850,7 +856,10 @@ function renderChatChrome() {
       <span class="ch-name">${esc(chatTitle(c))}<span class="ch-chev">${I.chevron}</span></span>
       <span class="ch-sub ${dm && presenceOf(other) === 'dnd' ? 'dnd' : ''}">${dm && presenceOf(other) === 'dnd' ? `${MOON} ` : ''}${esc(sub)}</span>
     </button>
-    <button class="icon-btn ch-info ${S.detailsOpen ? 'on' : ''}" data-act="details" title="Details">${I.info}</button>`;
+    <span class="ch-actions">
+      ${dm ? `<button class="icon-btn ch-call" data-act="call" title="Video call">${I.video}</button>` : ''}
+      <button class="icon-btn ch-info ${S.detailsOpen ? 'on' : ''}" data-act="details" title="Details">${I.info}</button>
+    </span>`;
   $('#input').placeholder = dm ? `Message ${user(other).displayName}` : `Message ${chatTitle(c)}`;
   renderDndNotice(c);
   renderComposerBar();
@@ -1943,6 +1952,7 @@ const ACTIONS = {
   profile: (el) => openProfile(el.dataset.uid, el),
   details: () => { S.detailsOpen = !S.detailsOpen; renderChatChrome(); },
   mute: () => toggleMute(S.chats.get(S.route.id)),
+  call: () => { const c = S.chats.get(S.route.id); if (c?.type === 'dm') startCall(c.id, otherMember(c)); },
   'add-people': () => openAddPeople(S.chats.get(S.route.id)),
   leave: () => {
     const m = modal(`<header class="modal-head"><h2>Leave conversation?</h2></header>

@@ -46,6 +46,54 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ---------- video calls ----------
+    // Only the ring and the connection handshake live here; audio, video and captions go
+    // directly between the two people and are never stored.
+    match /calls/{callId} {
+      function callers() { return [resource.data.from, resource.data.to]; }
+      function pairOf(a, b) { return a < b ? a + '_' + b : b + '_' + a; }
+      // Spelled out (not callers()) so the "calls ringing for me" query can be checked.
+      allow read: if signedIn() && (resource == null || resource.data.to == me() || resource.data.from == me());
+      // Friends only, from their DM.
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['chatId', 'from', 'to', 'members', 'status', 'offer', 'createdAt'])
+        && request.resource.data.from == me()
+        && request.resource.data.to is string
+        && request.resource.data.to != me()
+        && request.resource.data.members == [me(), request.resource.data.to]
+        && request.resource.data.status == 'ringing'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.offer.keys().hasOnly(['type', 'sdp'])
+        && request.resource.data.offer.sdp is string
+        && request.resource.data.offer.sdp.size() < 20000
+        && request.resource.data.chatId == 'dm_' + pairOf(me(), request.resource.data.to)
+        && areFriends(pairOf(me(), request.resource.data.to));
+      // Callee answers; either side ends. A finished call stays finished.
+      allow update: if signedIn() && me() in callers()
+        && resource.data.status in ['ringing', 'active']
+        && changed().hasOnly(['status', 'answer', 'endedAt'])
+        && request.resource.data.status in ['active', 'ended', 'declined', 'missed']
+        && (request.resource.data.status != 'active'
+            || (me() == resource.data.to && resource.data.status == 'ringing'
+                && request.resource.data.answer.keys().hasOnly(['type', 'sdp'])
+                && request.resource.data.answer.sdp is string
+                && request.resource.data.answer.sdp.size() < 20000))
+        && (!changed().hasAny(['answer']) || request.resource.data.status == 'active');
+      allow delete: if false;
+
+      // Network addresses each side shares to find a route to the other.
+      match /candidates/{candId} {
+        function call() { return get(/databases/$(database)/documents/calls/$(callId)).data; }
+        allow read: if signedIn() && me() in call().members;
+        allow create: if signedIn() && me() in call().members
+          && request.resource.data.keys().hasOnly(['from', 'c'])
+          && request.resource.data.from == me()
+          && request.resource.data.c is string
+          && request.resource.data.c.size() < 2000;
+        allow update, delete: if false;
+      }
+    }
+
     // ---------- friends ----------
     // One doc per pair, id = "<smaller uid>_<larger uid>". status: pending | accepted.
     match /friendRequests/{relId} {

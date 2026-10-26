@@ -362,7 +362,8 @@ code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-si
 .ch-sub { font-size: 11px; color: var(--text-3); display: flex; align-items: center; gap: 3px; margin-top: -2px; }
 .ch-sub.dnd { color: var(--moon); font-weight: 600; }
 .ch-sub svg { width: 11px; height: 11px; }
-.ch-info { grid-column: 3; justify-self: end; color: var(--accent); }
+.ch-actions { grid-column: 3; justify-self: end; display: flex; gap: 4px; }
+.ch-info, .ch-call { color: var(--accent); }
 .ch-info.on { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .chat-body { flex: 1; min-height: 0; position: relative; }
 .chat-body.drop::after {
@@ -764,3 +765,82 @@ button.det-row:hover, label.det-row:hover { background: var(--hover); }
 .note-icon { font-size: 28px; line-height: 1; width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--bg-3); }
 .note b { font-size: 15px; }
 .note p { margin: 2px 0 6px; color: var(--text-2); font-size: 14px; line-height: 1.4; }
+
+/* ----- video calls (always dark, like FaceTime) ----- */
+#callRoot { position: fixed; z-index: 400; }
+.call { position: fixed; inset: 0; background: #0b0b0d; color: #fff; overflow: hidden; }
+.call-remote { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
+.call-peer {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: radial-gradient(700px 500px at 50% 35%, #2c2c34, #0b0b0d);
+}
+.call-peer .avatar { --s: 120px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
+.call:not(.live) .call-peer .avatar { animation: call-pulse 1.8s ease-in-out infinite; }
+@keyframes call-pulse { 50% { box-shadow: 0 0 0 16px rgba(255, 255, 255, .08), 0 10px 40px rgba(0, 0, 0, .5); } }
+.call-flag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 99px; background: rgba(255, 255, 255, .14); font-size: 13px; font-weight: 600; }
+.call-flag svg { width: 14px; height: 14px; }
+.call-top {
+  position: absolute; top: 0; left: 0; right: 0; padding: calc(18px + env(safe-area-inset-top)) 20px 30px;
+  display: flex; flex-direction: column; gap: 2px; text-align: center;
+  background: linear-gradient(rgba(0, 0, 0, .55), transparent); text-shadow: 0 1px 3px rgba(0, 0, 0, .5);
+}
+.call-top b { font-size: 20px; }
+.call-top span { font-size: 14px; color: rgba(255, 255, 255, .8); font-variant-numeric: tabular-nums; }
+.call-local {
+  position: absolute; right: 16px; top: calc(16px + env(safe-area-inset-top)); width: min(26vw, 200px); aspect-ratio: 3 / 4;
+  object-fit: cover; border-radius: 14px; background: #222; transform: scaleX(-1);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .5); border: 1px solid rgba(255, 255, 255, .15); transition: all .3s ease;
+}
+/* While ringing, your own camera fills the screen behind the caller card. */
+.call:not(.live) .call-local { inset: 0; width: 100%; height: 100%; border-radius: 0; border: 0; opacity: .35; aspect-ratio: auto; }
+.call.self-off .call-local { visibility: hidden; }
+.call-cc {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(120px + env(safe-area-inset-bottom));
+  width: min(92vw, 760px); display: flex; flex-direction: column; gap: 6px; pointer-events: none;
+}
+.cc-line {
+  margin: 0; align-self: center; max-width: 100%; padding: 8px 14px; border-radius: 12px;
+  background: rgba(0, 0, 0, .72); font-size: clamp(17px, 2.4vw, 24px); line-height: 1.35; font-weight: 500;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.cc-line b { font-weight: 700; color: #8fd0ff; margin-right: 4px; }
+.cc-line.me { font-size: clamp(14px, 1.8vw, 17px); opacity: .8; }
+.cc-line.me b { color: #b5f5c5; }
+.cc-line.interim { color: rgba(255, 255, 255, .85); }
+.cc-note { margin: 0; align-self: center; padding: 6px 12px; border-radius: 10px; background: rgba(0, 0, 0, .6); font-size: 13px; color: rgba(255, 255, 255, .8); text-align: center; }
+.call-bar {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom));
+  display: flex; gap: 14px; padding: 12px 16px; border-radius: 99px;
+  background: rgba(40, 40, 46, .7); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+}
+.call-btn { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .16); color: #fff; transition: background .15s, transform .05s; }
+.call-btn:hover { background: rgba(255, 255, 255, .26); }
+.call-btn:active { transform: scale(.95); }
+.call-btn svg { width: 24px; height: 24px; }
+.call-btn.off { background: #fff; color: #111; }
+.call-btn.on { background: #fff; color: #111; }
+.call-btn.end { background: #ff3b30; }
+.call-btn.end:hover { background: #ff5146; }
+
+.call-ring {
+  position: fixed; top: calc(14px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 410;
+  width: min(420px, calc(100vw - 32px)); display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  border-radius: 22px; background: var(--glass); color: var(--text); box-shadow: var(--shadow);
+  -webkit-backdrop-filter: saturate(180%) blur(24px); backdrop-filter: saturate(180%) blur(24px);
+  border: 1px solid var(--line); animation: ring-in .3s ease;
+}
+@keyframes ring-in { from { opacity: 0; transform: translate(-50%, -16px); } }
+.call-ring .avatar { --s: 52px; flex: none; }
+.cr-who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cr-who b { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cr-who span { font-size: 13px; color: var(--text-2); display: flex; align-items: center; gap: 5px; }
+.cr-who svg { width: 14px; height: 14px; }
+.cr-btn { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none; }
+.cr-btn svg { width: 22px; height: 22px; }
+.cr-btn.decline { background: #ff3b30; }
+.cr-btn.accept { background: #34c759; animation: call-pulse 1.8s ease-in-out infinite; }
+@media (max-width: 520px) {
+  .call-btn { width: 52px; height: 52px; }
+  .call-bar { gap: 10px; }
+  .call-local { width: 30vw; }
+}

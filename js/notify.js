@@ -113,24 +113,40 @@ export function unlockAudio() {
 
 export const soundOn = () => localStorage.getItem('bubbles.sound') !== 'off';
 
+function tone(freq, at, vol, len) {
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(vol, at + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + len);
+  o.connect(g).connect(ctx.destination);
+  o.start(at);
+  o.stop(at + len + 0.05);
+}
+
 export function playSound(kind = 'in') {
   if (!ctx || !soundOn()) return;
   const now = ctx.currentTime;
   const notes = kind === 'in' ? [[880, 0], [1318.5, 0.1]] : [[523.25, 0], [1046.5, 0.05]];
   const vol = kind === 'in' ? 0.16 : 0.07;
-  for (const [freq, dt] of notes) {
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = 'sine';
-    o.frequency.value = freq;
-    g.gain.setValueAtTime(0.0001, now + dt);
-    g.gain.exponentialRampToValueAtTime(vol, now + dt + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + dt + (kind === 'in' ? 0.4 : 0.18));
-    o.connect(g).connect(ctx.destination);
-    o.start(now + dt);
-    o.stop(now + dt + 0.45);
-  }
+  for (const [freq, dt] of notes) tone(freq, now + dt, vol, kind === 'in' ? 0.4 : 0.18);
 }
+
+// Incoming-call ringtone: a two-note chime every couple of seconds until stopRing().
+let ringTimer = null;
+export function startRing() {
+  stopRing();
+  const ring = () => {
+    if (!ctx || !soundOn()) return;
+    const now = ctx.currentTime;
+    for (const [freq, dt] of [[659.25, 0], [880, 0.16], [659.25, 0.55], [880, 0.71]]) tone(freq, now + dt, 0.14, 0.3);
+  };
+  ring();
+  ringTimer = setInterval(ring, 2400);
+}
+export function stopRing() { clearInterval(ringTimer); ringTimer = null; }
 
 // Tab title + installed-app badge (shows on the Chromebook shelf icon).
 export function setBadge(n) {
