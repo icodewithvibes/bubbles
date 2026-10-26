@@ -55,11 +55,11 @@ const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 const EMOJI_PICKER_URL = 'https://cdn.jsdelivr.net/npm/emoji-picker-element@1.29.1/index.js';
 
 // Bump APP_VERSION and rewrite PATCH_NOTES to show everyone a "What's new" popup once.
-const APP_VERSION = '1.1';
+const APP_VERSION = '1.2';
 const PATCH_NOTES = [
-  { icon: '🖼️', title: 'Profile pictures', text: 'Add a profile picture and everyone sees it next to your name, in chats and on your profile. Click your name at the bottom left, then <b>Change Profile Picture</b>.', btn: 'Set mine', run: () => pickAvatar() },
-  { icon: '😀', title: 'Emoji picker', text: 'Tap the smiley next to the message box to search every emoji. You can react with any emoji too: tap <b>+</b> in the reaction bar.' },
-  { icon: '🌄', title: 'Chat backgrounds', text: 'Open a chat, tap its name at the top, then <b>Chat Background</b> to pick a photo. Everyone in the chat sees it.' },
+  { icon: '🎬', title: 'GIFs', text: 'Tap <b>GIF</b> next to the message box to pick from hundreds of GIFs. Browse categories like LOL, Hug and Bruh, or search for things like "thanks" or "dance".' },
+  { icon: '✨', title: 'Your own GIFs move', text: 'GIF files you send with <b>+</b>, paste or drag in now play instead of freezing on the first frame.' },
+  { icon: '🔄', title: 'Automatic updates', text: 'Bubbles now refreshes itself when there\'s an update, so you always have the newest version. It waits if you\'re in the middle of typing.' },
 ];
 
 const pairId = (a, b) => [a, b].sort().join('_');
@@ -90,6 +90,40 @@ function boot() {
   bindAuthForms();
   bindGlobalEvents();
   F.onAuthStateChanged(auth, onAuth);
+  watchForUpdates();
+}
+
+// ---------- auto-update ----------
+// GitHub Pages re-stamps every file on each deploy, so index.html's Last-Modified changes with any push.
+let deployedAt = null;
+let updateFound = false;
+
+function watchForUpdates() {
+  checkForUpdate();
+  setInterval(checkForUpdate, 60e3);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });
+}
+
+async function checkForUpdate() {
+  if (updateFound) return reloadWhenIdle();
+  try {
+    const res = await fetch('./index.html', { method: 'HEAD', cache: 'no-store' });
+    const stamp = res.ok && (res.headers.get('last-modified') || res.headers.get('etag'));
+    if (!stamp) return;
+    if (deployedAt === null) deployedAt = stamp;
+    else if (stamp !== deployedAt) {
+      updateFound = true;
+      // Give the deploy a moment to reach every CDN edge before loading the new files.
+      setTimeout(reloadWhenIdle, 15e3);
+    }
+  } catch { /* offline: try again next time */ }
+}
+
+// Never throw away a half-typed message or a dialog/menu someone is using; the next check retries.
+function reloadWhenIdle() {
+  const typing = [...$$('input, textarea')].some((el) => el.offsetParent && el.type !== 'checkbox' && el.value.trim());
+  if (typing || $('#modalRoot').children.length || $('#menuRoot').children.length) return;
+  location.reload();
 }
 
 let signupMode = false;
