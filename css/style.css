@@ -746,6 +746,20 @@ button.det-row:hover, label.det-row:hover { background: var(--hover); }
 }
 @keyframes goat-shine { from { background-position: 120% 0; } to { background-position: -120% 0; } }
 @media (prefers-reduced-motion: reduce) { .goat { animation: none; background-position: 50% 0; } }
+.poll { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: var(--bg-2); }
+.poll-q { font-size: 15px; }
+.poll-opts { display: flex; flex-direction: column; gap: 6px; }
+.poll-opt {
+  position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--card); text-align: left; font-weight: 600; font-size: 14px;
+}
+.poll-opt:hover { border-color: var(--accent); }
+.poll-opt.mine { border-color: var(--accent); }
+.poll-bar { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--accent) 22%, transparent); transition: width .4s ease; }
+.poll-label, .poll-pct { position: relative; }
+.poll-pct { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.poll-opt.mine .poll-pct { color: var(--accent); }
+.poll-foot { color: var(--text-3); font-size: 12px; }
 .note { display: flex; gap: 14px; align-items: flex-start; }
 .note-icon { font-size: 28px; line-height: 1; width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--bg-3); }
 .note b { font-size: 15px; }

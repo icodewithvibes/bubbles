@@ -55,8 +55,14 @@ const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 const EMOJI_PICKER_URL = 'https://cdn.jsdelivr.net/npm/emoji-picker-element@1.29.1/index.js';
 
 // Bump APP_VERSION and rewrite PATCH_NOTES to show everyone a "What's new" popup once.
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.3';
 const PATCH_INTRO = 'Since Yuriel Is A GOAT he decided to add working gifs';
+// Optional poll shown in the popup. Votes live in polls/<id>/votes/<uid>; use a new id for a new poll.
+const PATCH_POLL = {
+  id: 'goat-1',
+  question: 'How much is Yuriel a GOAT for this app?',
+  options: ['🐐 A little GOAT', '🐐🐐 Pretty big GOAT', '🐐🐐🐐 Huge GOAT', '🐐🐐🐐🐐 Biggest GOAT ever'],
+};
 const PATCH_NOTES = [
   { icon: '🎬', title: 'GIFs', text: 'Tap <b>GIF</b> next to the message box to pick from hundreds of GIFs. Browse categories like LOL, Hug and Bruh, or search for things like "thanks" or "dance".' },
   { icon: '✨', title: 'Your own GIFs move', text: 'GIF files you send with <b>+</b>, paste or drag in now play instead of freezing on the first frame.' },
@@ -279,6 +285,7 @@ function teardown() {
   S.timers.forEach(clearInterval);
   S.msgUnsub?.();
   S.wallUnsub?.();
+  stopPoll();
   Object.assign(S, {
     started: false, wall: null, wallUnsub: null, me: null, unsubs: [], timers: [], userUnsubs: new Map(), users: new Map(),
     chats: new Map(), rels: new Map(), chatsLoaded: false, msgUnsub: null, msgChatId: null, msgs: [],
@@ -1532,7 +1539,7 @@ function modal(html, cls = '') {
   $('#modalRoot').innerHTML = `<div class="modal-back"><div class="modal ${cls}" role="dialog" aria-modal="true">${html}</div></div>`;
   return $('#modalRoot .modal');
 }
-const closeModal = () => { $('#modalRoot').innerHTML = ''; };
+const closeModal = () => { stopPoll(); $('#modalRoot').innerHTML = ''; };
 
 function toast(html, kind = 'info', ttl = 3200) {
   const el = document.createElement('div');
@@ -1848,17 +1855,64 @@ function maybeShowPatchNotes() {
 function openPatchNotes() {
   const m = modal(`
     <header class="modal-head"><h2>What's new in Bubbles ${APP_VERSION}</h2><button class="icon-btn sm" data-act="close-modal">${I.x}</button></header>
-    <div class="notes">${PATCH_INTRO ? `<p class="notes-intro">${esc(PATCH_INTRO).replace('GOAT', '<span class="goat">GOAT</span>')}</p>` : ''}${PATCH_NOTES.map((n, i) => `
+    <div class="notes">${PATCH_INTRO ? `<p class="notes-intro">${shineGoat(esc(PATCH_INTRO))}</p>` : ''}${PATCH_POLL ? `
+      <div class="poll"><b class="poll-q">${shineGoat(esc(PATCH_POLL.question))}</b><div class="poll-opts" id="pollOpts"></div><small class="poll-foot" id="pollFoot">Loading votes…</small></div>` : ''}${PATCH_NOTES.map((n, i) => `
       <div class="note"><span class="note-icon">${n.icon}</span>
         <div><b>${esc(n.title)}</b><p>${n.text}</p>${n.btn ? `<button class="btn btn-sm" data-note="${i}">${esc(n.btn)}</button>` : ''}</div></div>`).join('')}
     </div>
     <footer class="modal-foot"><button class="btn btn-primary" data-act="close-modal">Got it</button></footer>`, 'patch-notes');
   m.addEventListener('click', (e) => {
+    const v = e.target.closest('[data-vote]');
+    if (v) return vote(+v.dataset.vote);
     const b = e.target.closest('[data-note]');
     if (!b) return;
     closeModal();
     PATCH_NOTES[b.dataset.note].run();
   });
+  if (PATCH_POLL) watchPoll();
+}
+
+const shineGoat = (html) => html.replace('GOAT', '<span class="goat">GOAT</span>');
+
+// ---------- poll ----------
+// Everyone sees totals only; a vote can be changed by tapping another option.
+let pollUnsub = null;
+const votesRef = () => F.collection(db, 'polls', PATCH_POLL.id, 'votes');
+
+function watchPoll() {
+  stopPoll();
+  pollUnsub = F.onSnapshot(votesRef(), (snap) => {
+    if (!$('#pollOpts')) return stopPoll();
+    const counts = PATCH_POLL.options.map(() => 0);
+    let mine = null;
+    snap.forEach((d) => {
+      const { choice } = d.data();
+      if (counts[choice] !== undefined) counts[choice]++;
+      if (d.id === S.uid) mine = choice;
+    });
+    renderPoll(counts, mine);
+  }, () => { if ($('#pollFoot')) $('#pollFoot').textContent = "Couldn't load the poll."; });
+}
+
+function stopPoll() { pollUnsub?.(); pollUnsub = null; }
+
+function renderPoll(counts, mine) {
+  const total = counts.reduce((a, b) => a + b, 0);
+  const voted = mine !== null;
+  $('#pollOpts').innerHTML = PATCH_POLL.options.map((o, i) => {
+    const pct = total ? Math.round((counts[i] / total) * 100) : 0;
+    return `<button class="poll-opt ${mine === i ? 'mine' : ''}" data-vote="${i}">
+      ${voted ? `<span class="poll-bar" style="width:${pct}%"></span>` : ''}
+      <span class="poll-label">${esc(o)}</span>${voted ? `<span class="poll-pct">${pct}%</span>` : ''}</button>`;
+  }).join('');
+  $('#pollFoot').textContent = voted
+    ? `${total} ${total === 1 ? 'vote' : 'votes'} · tap another option to change yours`
+    : 'Vote to see the results';
+}
+
+function vote(choice) {
+  F.setDoc(F.doc(votesRef(), S.uid), { choice, at: F.serverTimestamp() })
+    .catch(() => toast("Couldn't save your vote", 'error'));
 }
 
 // ============================================================================

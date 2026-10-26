@@ -34,6 +34,18 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ---------- polls (shown in "What's new") ----------
+    // One vote doc per person, id = their uid, so nobody can vote twice or for someone else.
+    match /polls/{pollId}/votes/{uid} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && me() == uid
+        && request.resource.data.keys().hasOnly(['choice', 'at'])
+        && request.resource.data.choice is int
+        && request.resource.data.choice >= 0 && request.resource.data.choice < 10
+        && request.resource.data.at == request.time;
+      allow delete: if false;
+    }
+
     // ---------- friends ----------
     // One doc per pair, id = "<smaller uid>_<larger uid>". status: pending | accepted.
     match /friendRequests/{relId} {
