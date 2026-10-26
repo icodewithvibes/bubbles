@@ -15,7 +15,8 @@ service cloud.firestore {
       allow create: if signedIn() && me() == uid
         && getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.username)).data.uid == uid;
       allow update: if signedIn() && me() == uid
-        && request.resource.data.username == resource.data.username;
+        && request.resource.data.username == resource.data.username
+        && request.resource.data.get('photoURL', '').size() < 150000;
 
       // Push tokens, read only by the Cloud Function (admin) and the owner.
       match /tokens/{token} {
@@ -80,6 +81,18 @@ service cloud.firestore {
         && me() in resource.data.members
         && request.resource.data.type == resource.data.type
         && (resource.data.type == 'group' || !changed().hasAny(['members']));
+
+      // Chat background, shared by every member. Its own doc so chat updates stay small.
+      match /meta/{metaId} {
+        function members() { return get(/databases/$(database)/documents/chats/$(chatId)).data.members; }
+        allow read: if signedIn() && me() in members();
+        allow write: if signedIn() && me() in members()
+          && metaId == 'style'
+          && request.resource.data.keys().hasOnly(['wallpaper', 'by', 'updatedAt'])
+          && request.resource.data.by == me()
+          && request.resource.data.wallpaper is string
+          && request.resource.data.wallpaper.size() < 800000;
+      }
 
       match /messages/{msgId} {
         function chatAfter() { return getAfter(/databases/$(database)/documents/chats/$(chatId)).data; }

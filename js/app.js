@@ -37,6 +37,8 @@ const S = {
   detailsOpen: false,
   typingSentAt: 0,
   marking: null,
+  wall: null,              // open chat's background image (data URL)
+  wallUnsub: null,
   // notifications
   sessionStart: Date.now(),
   lastNotified: {},
@@ -49,12 +51,23 @@ const STAMP_GAP = 15 * 60e3;  // gap that earns a centered timestamp
 const TYPING_TTL = 6000;
 const OFFLINE_AFTER = 7 * 60e3;
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
+const EMOJI_PICKER_URL = 'https://cdn.jsdelivr.net/npm/emoji-picker-element@1.29.1/index.js';
+
+// Bump APP_VERSION and rewrite PATCH_NOTES to show everyone a "What's new" popup once.
+const APP_VERSION = '1.1';
+const PATCH_NOTES = [
+  { icon: '🖼️', title: 'Profile pictures', text: 'Add a profile picture and everyone sees it next to your name, in chats and on your profile. Click your name at the bottom left, then <b>Change Profile Picture</b>.', btn: 'Set mine', run: () => pickAvatar() },
+  { icon: '😀', title: 'Emoji picker', text: 'Tap the smiley next to the message box to search every emoji. You can react with any emoji too: tap <b>+</b> in the reaction bar.' },
+  { icon: '🌄', title: 'Chat backgrounds', text: 'Open a chat, tap its name at the top, then <b>Chat Background</b> to pick a photo. Everyone in the chat sees it.' },
+];
 
 const pairId = (a, b) => [a, b].sort().join('_');
 const dmId = (a, b) => `dm_${pairId(a, b)}`;
 const userRef = (uid) => F.doc(db, 'users', uid);
 const chatRef = (id) => F.doc(db, 'chats', id);
 const msgRef = (chatId, id) => F.doc(db, 'chats', chatId, 'messages', id);
+// Kept out of the chat doc so typing/read-receipt updates don't resend the image.
+const styleRef = (chatId) => F.doc(db, 'chats', chatId, 'meta', 'style');
 const user = (uid) => S.users.get(uid) || { id: uid, displayName: '…' };
 const nameOf = (uid) => (uid === S.uid ? 'You' : user(uid).displayName || 'Someone');
 const firstName = (uid) => nameOf(uid).split(' ')[0];
@@ -229,8 +242,9 @@ function teardown() {
   S.userUnsubs.forEach((u) => u());
   S.timers.forEach(clearInterval);
   S.msgUnsub?.();
+  S.wallUnsub?.();
   Object.assign(S, {
-    started: false, me: null, unsubs: [], timers: [], userUnsubs: new Map(), users: new Map(),
+    started: false, wall: null, wallUnsub: null, me: null, unsubs: [], timers: [], userUnsubs: new Map(), users: new Map(),
     chats: new Map(), rels: new Map(), chatsLoaded: false, msgUnsub: null, msgChatId: null, msgs: [],
     route: { view: 'home' }, builtChat: null, builtFriends: false,
   });
@@ -256,6 +270,7 @@ function watchUser(uid) {
       if (first) {
         show('app');
         route();
+        setTimeout(maybeShowPatchNotes, 600);
       }
     }
     render('all');
@@ -427,7 +442,8 @@ function route() {
     N.clearChatNotifications(r.id);
   } else {
     S.msgUnsub?.();
-    Object.assign(S, { msgUnsub: null, msgChatId: null, msgs: [] });
+    S.wallUnsub?.();
+    Object.assign(S, { msgUnsub: null, msgChatId: null, msgs: [], wall: null, wallUnsub: null });
   }
   $('#app').classList.toggle('show-main', r.view !== 'home');
   render('all');
@@ -737,6 +753,7 @@ function buildChat(c) {
           <div class="comp-bar" id="compBar" hidden></div>
           <div class="comp-row">
             <button class="comp-plus" data-act="attach" title="Send a photo">${I.plus}</button>
+            <button class="comp-plus comp-emoji" data-act="emoji" title="Emoji">${I.smile}</button>
             <div class="comp-field">
               <textarea id="input" rows="1" maxlength="4000" placeholder="Message" aria-label="Message"></textarea>
               <button class="send-btn" id="sendBtn" data-act="send" title="Send" hidden>${I.up}</button>
@@ -769,6 +786,7 @@ function buildChat(c) {
     const f = [...e.dataTransfer.files].find((x) => x.type.startsWith('image/'));
     if (f) sendImage(f);
   });
+  applyWallpaper();
   if (matchMedia('(pointer: fine)').matches) input.focus();
 }
 
@@ -827,6 +845,36 @@ function subscribeMessages(chatId) {
   S.msgUnsub?.();
   Object.assign(S, { msgChatId: chatId, msgs: [], msgLimit: 50, hasMore: false, loadingOlder: false });
   listenMessages();
+  listenWallpaper(chatId);
+}
+
+// ---------- chat background (shared by everyone in the chat) ----------
+function listenWallpaper(chatId) {
+  S.wallUnsub?.();
+  S.wall = null;
+  S.wallUnsub = F.onSnapshot(styleRef(chatId), (snap) => {
+    if (S.msgChatId !== chatId) return;
+    S.wall = snap.data()?.wallpaper || null;
+    applyWallpaper();
+    render('header');
+  }, (e) => console.warn('wallpaper', e));
+}
+
+function applyWallpaper() {
+  const col = $('.chat-col');
+  if (!col) return;
+  col.classList.toggle('has-wall', !!S.wall);
+  col.style.backgroundImage = S.wall ? `url("${S.wall}")` : '';
+}
+
+async function setWallpaper(c, file) {
+  try {
+    const wallpaper = file ? await compressImage(file, 1600, 700_000) : '';
+    await F.setDoc(styleRef(c.id), { wallpaper, by: S.uid, updatedAt: F.serverTimestamp() });
+    postMessage(c, { system: true, text: wallpaper ? 'changed the chat background' : 'removed the chat background' });
+  } catch (e) {
+    toast(e.code === 'permission-denied' ? "Couldn't change the background" : e.message, 'error');
+  }
 }
 
 function listenMessages() {
@@ -1042,6 +1090,13 @@ function renderDetails(c) {
         <input type="checkbox" data-act="mute" ${isMuted(c) ? 'checked' : ''}><i class="switch"></i></label>
       <div class="det-row static">${I.check}<span>Read receipts</span><small>Always on</small></div>
     </div>
+    <div class="det-group">
+      <div class="det-label">Chat Background</div>
+      ${S.wall ? `<div class="det-wall" style="background-image:url(&quot;${esc(S.wall)}&quot;)"></div>` : ''}
+      <button class="det-row link-row" data-act="wall-pick">${I.image}<span>${S.wall ? 'Change Background' : 'Choose a Photo'}</span></button>
+      ${S.wall ? `<button class="det-row danger" data-act="wall-remove">${I.trash}<span>Remove Background</span></button>` : ''}
+      <input type="file" id="wallInput" accept="image/*" hidden>
+    </div>
     ${dm ? '' : `
     <div class="det-group">
       <div class="det-label">${c.members.length} Members</div>
@@ -1051,6 +1106,7 @@ function renderDetails(c) {
       <button class="det-row link-row" data-act="add-people">${I.userPlus}<span>Add People</span></button>
     </div>
     <div class="det-group"><button class="det-row danger" data-act="leave">${I.logout}<span>Leave this Conversation</span></button></div>`}`;
+  $('#wallInput', el).onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) setWallpaper(c, f); };
   const gn = $('#groupName');
   if (gn) {
     const commit = () => {
@@ -1359,7 +1415,8 @@ function openMsgMenu(m, anchor, at) {
 function openTapback(m, anchor) {
   const current = m.reactions?.[S.uid];
   const el = popover(`${[...TAPBACKS, ...MORE_REACTIONS].map((e, i) => `
-    <button class="tp ${current === e ? 'on' : ''} ${i >= TAPBACKS.length ? 'extra' : ''}" data-act="react" data-id="${m.id}" data-emoji="${e}">${e}</button>`).join('')}`,
+    <button class="tp ${current === e ? 'on' : ''} ${i >= TAPBACKS.length ? 'extra' : ''}" data-act="react" data-id="${m.id}" data-emoji="${e}">${e}</button>`).join('')}
+    <button class="tp tp-more" data-act="react-more" data-id="${m.id}" title="More emoji">${I.plus}</button>`,
   anchor, { cls: 'tapback-picker' });
   el.addEventListener('click', () => setTimeout(() => el.remove(), 0));
 }
@@ -1372,6 +1429,7 @@ function openStatusMenu(anchor) {
     { id: 'dnd', label: 'Do Not Disturb<small>Silences notifications. Friends see it.</small>', icon: dot('dnd'), run: () => openDndMenu(anchor) },
     { id: 'invisible', label: 'Invisible<small>Appear offline</small>', icon: dot('offline'), run: () => setStatus('invisible') },
     '-',
+    { id: 'avatar', label: 'Change Profile Picture', icon: I.image, run: () => pickAvatar() },
     { id: 'profile', label: 'Edit Profile', icon: I.pencil, run: openSettings },
   ], anchor, { place: 'top', cls: 'menu status-menu' });
 }
@@ -1391,7 +1449,7 @@ function openProfile(uid, anchor) {
   const rel = relWith(uid);
   const p = presenceOf(uid);
   let actions = '';
-  if (uid === S.uid) actions = '<button class="btn btn-sm" data-act="settings">Edit Profile</button>';
+  if (uid === S.uid) actions = '<button class="btn btn-sm" data-act="pick-avatar">Change Picture</button><button class="btn btn-sm" data-act="settings">Edit Profile</button>';
   else if (rel?.status === 'accepted') actions = `<button class="btn btn-sm btn-primary" data-act="dm" data-uid="${uid}">Message</button>`;
   else if (rel?.to === S.uid) actions = `<button class="btn btn-sm btn-primary" data-act="accept" data-id="${rel.id}">Accept Friend Request</button>`;
   else if (rel) actions = '<button class="btn btn-sm" disabled>Friend Request Sent</button>';
@@ -1548,6 +1606,9 @@ function openSettings() {
         </div>
         <button class="btn btn-danger" id="signOutBtn">${I.logout} Sign out</button>
       </section>
+      <section>
+        <button class="link" data-act="patch-notes">What's new in Bubbles ${APP_VERSION}</button>
+      </section>
     </div>`, 'settings-modal');
 
   const saveProfile = () => {
@@ -1564,11 +1625,8 @@ function openSettings() {
   $('#avInput', m).onchange = async (e) => {
     const f = e.target.files[0];
     if (!f) return;
-    try {
-      const photoURL = await compressImage(f, 256, 90_000);
-      await F.updateDoc(userRef(S.uid), { photoURL });
-      $('#avBtn', m).innerHTML = `${avatar({ ...S.me, photoURL }, 72)}<span>Edit</span>`;
-    } catch (ex) { toast(ex.message, 'error'); }
+    const photoURL = await saveAvatar(f);
+    if (photoURL) $('#avBtn', m).innerHTML = `${avatar({ ...S.me, photoURL }, 72)}<span>Edit</span>`;
   };
   $('#avRemove', m)?.addEventListener('click', () => F.updateDoc(userRef(S.uid), { photoURL: '' }).then(closeModal));
   $('#statusSeg', m).onclick = (e) => {
@@ -1624,6 +1682,72 @@ function openSettings() {
   };
 }
 
+// ---------- profile picture ----------
+async function saveAvatar(file) {
+  try {
+    const photoURL = await compressImage(file, 256, 90_000);
+    await F.updateDoc(userRef(S.uid), { photoURL });
+    toast('Profile picture updated');
+    return photoURL;
+  } catch (e) {
+    toast(e.message, 'error');
+    return null;
+  }
+}
+
+function pickAvatar() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = () => { if (input.files[0]) saveAvatar(input.files[0]); };
+  input.click();
+}
+
+// ---------- emoji (system emoji via emoji-picker-element, loaded on first use) ----------
+let emojiLib = null;
+async function openEmojiPicker(anchor, onPick) {
+  emojiLib ||= import(EMOJI_PICKER_URL);
+  try { await emojiLib; } catch {
+    emojiLib = null;
+    return toast("Couldn't load emoji. Check your connection.", 'error');
+  }
+  const theme = pref('theme', 'system');
+  const el = popover(`<emoji-picker class="${theme === 'system' ? '' : theme}"></emoji-picker>`, anchor, { place: 'top', cls: 'emoji-pop' });
+  $('emoji-picker', el).addEventListener('emoji-click', (e) => onPick(e.detail.unicode));
+}
+
+function insertEmoji(emoji) {
+  const input = $('#input');
+  if (!input) return;
+  const { selectionStart: a, selectionEnd: b, value } = input;
+  input.value = value.slice(0, a) + emoji + value.slice(b);
+  input.selectionStart = input.selectionEnd = a + emoji.length;
+  onComposerInput();
+}
+
+// ---------- patch notes ----------
+function maybeShowPatchNotes() {
+  if (!S.me || pref('seenVersion', '') === APP_VERSION) return;
+  setPref('seenVersion', APP_VERSION);
+  if (!$('#modalRoot').children.length) openPatchNotes();
+}
+
+function openPatchNotes() {
+  const m = modal(`
+    <header class="modal-head"><h2>What's new in Bubbles ${APP_VERSION}</h2><button class="icon-btn sm" data-act="close-modal">${I.x}</button></header>
+    <div class="notes">${PATCH_NOTES.map((n, i) => `
+      <div class="note"><span class="note-icon">${n.icon}</span>
+        <div><b>${esc(n.title)}</b><p>${n.text}</p>${n.btn ? `<button class="btn btn-sm" data-note="${i}">${esc(n.btn)}</button>` : ''}</div></div>`).join('')}
+    </div>
+    <footer class="modal-foot"><button class="btn btn-primary" data-act="close-modal">Got it</button></footer>`, 'patch-notes');
+  m.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-note]');
+    if (!b) return;
+    closeModal();
+    PATCH_NOTES[b.dataset.note].run();
+  });
+}
+
 // ============================================================================
 // Global events
 // ============================================================================
@@ -1662,6 +1786,19 @@ const ACTIONS = {
   'notify-anyway': () => { S.urgentNext = true; renderChatChrome(); $('#input').focus(); },
   'urgent-off': () => { S.urgentNext = false; renderChatChrome(); },
   attach: () => $('#fileInput').click(),
+  emoji: (el) => {
+    if ($('#menuRoot .emoji-pop')) return closeMenu();
+    openEmojiPicker(el, insertEmoji);
+  },
+  'react-more': (el) => {
+    const m = findMsg(el.dataset.id);
+    const anchor = $(`#m-${CSS.escape(el.dataset.id)} .msg-content`) || el;
+    if (m) openEmojiPicker(anchor, (e) => { closeMenu(); toggleReaction(m, e); });
+  },
+  'wall-pick': () => $('#wallInput')?.click(),
+  'wall-remove': () => setWallpaper(S.chats.get(S.route.id), null),
+  'pick-avatar': () => { closeMenu(); pickAvatar(); },
+  'patch-notes': () => openPatchNotes(),
   send: () => send(),
   'cancel-compose': () => cancelCompose(),
   jump: () => { scrollToBottom(); $('#jump').hidden = true; },
@@ -1706,7 +1843,7 @@ function bindGlobalEvents() {
     }
     if (e.target.classList.contains('modal-back')) return closeModal();
     const el = e.target.closest('[data-act]');
-    if (!e.target.closest('#menuRoot') && !(el && ['tapback', 'msg-menu', 'friend-menu', 'status-menu', 'dnd-toggle', 'profile'].includes(el.dataset.act))) closeMenu();
+    if (!e.target.closest('#menuRoot') && !(el && ['tapback', 'msg-menu', 'friend-menu', 'status-menu', 'dnd-toggle', 'profile', 'emoji'].includes(el.dataset.act))) closeMenu();
     if (!el || !ACTIONS[el.dataset.act]) return;
     if (el.tagName !== 'INPUT') e.preventDefault();
     const inMenu = el.closest('#menuRoot');

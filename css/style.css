@@ -585,7 +585,7 @@ button.det-row:hover, label.det-row:hover { background: var(--hover); }
 .pc-pres svg { width: 12px; height: 12px; }
 .pc-sec { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .pc-sec h4 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; color: var(--text-2); }
-.pc-actions { margin-top: 14px; display: flex; }
+.pc-actions { margin-top: 14px; display: flex; gap: 8px; }
 .pc-actions .btn { flex: 1; }
 
 .modal-back {
@@ -678,3 +678,38 @@ button.det-row:hover, label.det-row:hover { background: var(--hover); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ----- chat background (shared per chat) ----- */
+.chat-col.has-wall { background: var(--bg) center / cover no-repeat; }
+.has-wall .chat-body::before { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--bg) 18%, transparent); pointer-events: none; }
+/* Tails are cut out with a --bg colored mask, which can't match a photo, so bubbles go tail-less here. */
+.has-wall .msg-content > .bubble::before, .has-wall .msg-content > .bubble::after { display: none; }
+.has-wall .tb { border-color: transparent; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); }
+.has-wall .stamp, .has-wall .sys-msg, .has-wall .receipt, .has-wall .msg-name, .has-wall .edited, .has-wall .typing-who,
+.has-wall .reply-ref, .has-wall .convo-intro, .has-wall .dnd-notice, .has-wall .loading-older {
+  width: fit-content; margin-left: auto; margin-right: auto; padding: 3px 10px; border-radius: 12px;
+  background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); color: var(--text-2);
+}
+.has-wall .receipt { margin-right: 4px; }
+.has-wall .msg-name, .has-wall .reply-ref, .has-wall .edited { margin-left: 8px; margin-right: 8px; }
+.has-wall .convo-intro { padding: 14px 20px; border-radius: 18px; }
+.has-wall .composer { background: var(--glass); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border-top: 1px solid var(--line); }
+.det-wall { height: 120px; margin: 4px 14px 10px; border-radius: 10px; background: var(--bg-3) center / cover no-repeat; }
+
+/* ----- emoji picker ----- */
+.emoji-pop { padding: 0; overflow: hidden; }
+.emoji-pop emoji-picker {
+  --background: var(--card); --border-color: transparent; --input-border-color: var(--line-2); --input-font-color: var(--text);
+  --input-placeholder-color: var(--text-3); --outline-color: var(--accent); --indicator-color: var(--accent);
+  --button-hover-background: var(--hover); --button-active-background: var(--bg-3); --category-font-color: var(--text-2);
+  --emoji-size: 1.45rem; width: min(352px, calc(100vw - 16px)); height: min(400px, 60vh);
+}
+.tp-more { color: var(--text-2); }
+.tp-more svg { width: 20px; height: 20px; }
+
+/* ----- patch notes ----- */
+.notes { padding: 4px 20px 8px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+.note { display: flex; gap: 14px; align-items: flex-start; }
+.note-icon { font-size: 28px; line-height: 1; width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--bg-3); }
+.note b { font-size: 15px; }
+.note p { margin: 2px 0 6px; color: var(--text-2); font-size: 14px; line-height: 1.4; }
