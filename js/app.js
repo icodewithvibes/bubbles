@@ -4,6 +4,7 @@ import {
   $, $$, esc, ms, avatar, formatText, isEmojiOnly, fmtListTime, fmtStamp, fmtClock, fmtAgo,
   compressImage, I, logo, PRESENCE_LABEL,
 } from './util.js';
+import { GIF_CATEGORIES } from './gifs.js';
 
 const { auth, db } = F;
 
@@ -754,6 +755,7 @@ function buildChat(c) {
           <div class="comp-row">
             <button class="comp-plus" data-act="attach" title="Send a photo">${I.plus}</button>
             <button class="comp-plus comp-emoji" data-act="emoji" title="Emoji">${I.smile}</button>
+            <button class="comp-plus comp-gif" data-act="gif" title="GIFs">GIF</button>
             <div class="comp-field">
               <textarea id="input" rows="1" maxlength="4000" placeholder="Message" aria-label="Message"></textarea>
               <button class="send-btn" id="sendBtn" data-act="send" title="Send" hidden>${I.up}</button>
@@ -784,7 +786,10 @@ function buildChat(c) {
     e.preventDefault();
     body.classList.remove('drop');
     const f = [...e.dataTransfer.files].find((x) => x.type.startsWith('image/'));
-    if (f) sendImage(f);
+    if (f) return sendImage(f);
+    // A GIF dragged straight from another web page arrives as a link, not a file.
+    const url = (e.dataTransfer.getData('text/uri-list') || '').split('\n')[0].trim();
+    if (/^https:\/\/\S+\.gif(\?\S*)?$/i.test(url)) sendGif(url);
   });
   applyWallpaper();
   if (matchMedia('(pointer: fine)').matches) input.focus();
@@ -1004,7 +1009,7 @@ function messageHTML(m, { mine, start, end, group }) {
   const reply = m.replyTo ? `<button class="reply-ref" data-act="jump-to" data-id="${esc(m.replyTo.id)}">
       <span class="reply-line"></span><b>${esc(nameOf(m.replyTo.senderId))}</b> ${esc(m.replyTo.text || '📷 Photo')}</button>` : '';
   const content = m.image
-    ? `<img class="msg-img" src="${esc(m.image)}" alt="Photo" data-act="lightbox">${m.text ? `<div class="bubble">${formatText(m.text)}</div>` : ''}`
+    ? `<img class="msg-img" src="${esc(m.image)}" alt="${isGif(m.image) ? 'GIF' : 'Photo'}" data-act="lightbox">${m.text ? `<div class="bubble">${formatText(m.text)}</div>` : ''}`
     : `<div class="bubble ${jumbo ? 'jumbo' : ''}">${jumbo ? esc(m.text) : formatText(m.text)}</div>`;
   const tools = `<div class="msg-tools">
       <button data-act="tapback" data-id="${m.id}" title="React">${I.smile}</button>
@@ -1211,7 +1216,8 @@ async function sendImage(file) {
   const c = S.chats.get(S.route.id);
   if (!c) return;
   try {
-    const image = await compressImage(file);
+    // Re-encoding through a canvas keeps only the first frame, so GIFs go up untouched.
+    const image = file.type === 'image/gif' ? await gifDataUrl(file) : await compressImage(file);
     const caption = $('#input').value.trim();
     $('#input').value = '';
     autosize();
@@ -1222,6 +1228,27 @@ async function sendImage(file) {
     toast(e.message, 'error');
   }
 }
+
+function gifDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => (r.result.length <= 850_000 ? resolve(r.result)
+      : reject(new Error('That GIF is too big to send (max about 600 KB). Try the GIF button instead.')));
+    r.onerror = () => reject(new Error("Couldn't read that GIF."));
+    r.readAsDataURL(file);
+  });
+}
+
+// GIFs from the library (or dragged in from the web) are sent as links, not uploaded.
+function sendGif(url) {
+  const c = S.chats.get(S.route.id);
+  if (!c) return;
+  postMessage(c, { image: url, replyTo: S.replyTo });
+  S.replyTo = null;
+  renderComposerBar();
+}
+
+const isGif = (src) => /^data:image\/gif|\.gif(\?|$)/i.test(src || '');
 
 function postMessage(c, { text = '', image = null, replyTo = null, system = false }) {
   const ref = F.doc(F.collection(db, 'chats', c.id, 'messages'));
@@ -1234,7 +1261,7 @@ function postMessage(c, { text = '', image = null, replyTo = null, system = fals
   b.set(ref, msg);
   b.update(chatRef(c.id), {
     lastMessage: {
-      id: ref.id, senderId: S.uid, text: (text || '').slice(0, 200) || (image ? '📷 Photo' : ''),
+      id: ref.id, senderId: S.uid, text: (text || '').slice(0, 200) || (image ? (isGif(image) ? 'GIF' : '📷 Photo') : ''),
       createdAt: F.serverTimestamp(), system, urgent: !!msg.urgent,
     },
     updatedAt: F.serverTimestamp(),
@@ -1716,6 +1743,54 @@ async function openEmojiPicker(anchor, onPick) {
   $('emoji-picker', el).addEventListener('emoji-click', (e) => onPick(e.detail.unicode));
 }
 
+// ---------- GIFs (built-in library from js/gifs.js) ----------
+const gifUrl = (entry) => `https://media.tenor.com/${entry}.gif`;
+const gifTile = (entry) => `<button class="gif-item" data-gif="${esc(entry)}"><img src="${gifUrl(entry)}" alt="${esc(entry.split('/')[1].replace(/-/g, ' '))}" loading="lazy"></button>`;
+
+function searchGifs(q) {
+  const words = q.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  if (!words.length) return [];
+  const seen = new Set();
+  const hits = [];
+  for (const c of GIF_CATEGORIES) {
+    for (const g of c.gifs) {
+      const tags = `${c.name} ${g.split('/')[1]}`.toLowerCase().split(/[^a-z0-9]+/);
+      if (seen.has(g) || !words.every((w) => tags.some((t) => t.startsWith(w)))) continue;
+      seen.add(g);
+      hits.push(g);
+    }
+  }
+  return hits;
+}
+
+function openGifPicker(anchor) {
+  const el = popover(`
+    <div class="gif-head"><input type="search" class="gif-search" placeholder="Search GIFs" autocomplete="off"></div>
+    <div class="gif-body"></div>`, anchor, { place: 'top', cls: 'gif-pop' });
+  const body = $('.gif-body', el);
+  const search = $('.gif-search', el);
+  const show = (html) => { body.innerHTML = html; body.scrollTop = 0; };
+  const home = () => show(`<div class="gif-cats">${GIF_CATEGORIES.map((c, i) => `
+    <button class="gif-cat" data-cat="${i}"><img src="${gifUrl(c.gifs[0])}" alt="" loading="lazy"><span>${c.icon} ${esc(c.name)}</span></button>`).join('')}</div>`);
+  const category = (c) => show(`<button class="gif-back" data-back>${I.back} ${c.icon} ${esc(c.name)}</button>
+    <div class="gif-grid">${c.gifs.map(gifTile).join('')}</div>`);
+  search.addEventListener('input', () => {
+    const q = search.value.trim();
+    if (!q) return home();
+    const hits = searchGifs(q);
+    show(hits.length ? `<div class="gif-grid">${hits.map(gifTile).join('')}</div>` : '<p class="gif-empty">No GIFs found. Try another word.</p>');
+  });
+  body.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-gif], [data-cat], [data-back]');
+    if (!t) return;
+    if (t.dataset.gif) { closeMenu(); sendGif(gifUrl(t.dataset.gif)); return; }
+    if (t.dataset.cat) category(GIF_CATEGORIES[+t.dataset.cat]);
+    else { search.value = ''; home(); }
+  });
+  home();
+  if (matchMedia('(pointer: fine)').matches) search.focus();
+}
+
 function insertEmoji(emoji) {
   const input = $('#input');
   if (!input) return;
@@ -1790,6 +1865,10 @@ const ACTIONS = {
     if ($('#menuRoot .emoji-pop')) return closeMenu();
     openEmojiPicker(el, insertEmoji);
   },
+  gif: (el) => {
+    if ($('#menuRoot .gif-pop')) return closeMenu();
+    openGifPicker(el);
+  },
   'react-more': (el) => {
     const m = findMsg(el.dataset.id);
     const anchor = $(`#m-${CSS.escape(el.dataset.id)} .msg-content`) || el;
@@ -1843,7 +1922,7 @@ function bindGlobalEvents() {
     }
     if (e.target.classList.contains('modal-back')) return closeModal();
     const el = e.target.closest('[data-act]');
-    if (!e.target.closest('#menuRoot') && !(el && ['tapback', 'msg-menu', 'friend-menu', 'status-menu', 'dnd-toggle', 'profile', 'emoji'].includes(el.dataset.act))) closeMenu();
+    if (!e.target.closest('#menuRoot') && !(el && ['tapback', 'msg-menu', 'friend-menu', 'status-menu', 'dnd-toggle', 'profile', 'emoji', 'gif'].includes(el.dataset.act))) closeMenu();
     if (!el || !ACTIONS[el.dataset.act]) return;
     if (el.tagName !== 'INPUT') e.preventDefault();
     const inMenu = el.closest('#menuRoot');

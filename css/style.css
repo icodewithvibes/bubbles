@@ -704,6 +704,24 @@ button.det-row:hover, label.det-row:hover { background: var(--hover); }
   --button-hover-background: var(--hover); --button-active-background: var(--bg-3); --category-font-color: var(--text-2);
   --emoji-size: 1.45rem; width: min(352px, calc(100vw - 16px)); height: min(400px, 60vh);
 }
+/* ----- GIF picker ----- */
+.comp-gif { font-size: 11px; font-weight: 800; letter-spacing: .02em; }
+.gif-pop { padding: 0; overflow: hidden; display: flex; flex-direction: column; width: min(352px, calc(100vw - 16px)); height: min(420px, 60vh); }
+.gif-head { padding: 10px 10px 6px; }
+.gif-head input { width: 100%; }
+.gif-body { flex: 1; overflow-y: auto; padding: 4px 10px 10px; }
+.gif-cats, .gif-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.gif-cat { position: relative; height: 82px; border-radius: 10px; overflow: hidden; background: var(--bg-3); }
+.gif-cat img, .gif-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gif-cat span {
+  position: absolute; inset: auto 0 0; padding: 14px 8px 6px; text-align: left; color: #fff; font-weight: 700; font-size: 13.5px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .65));
+}
+.gif-item { height: 110px; border-radius: 10px; overflow: hidden; background: var(--bg-3); }
+.gif-item:hover, .gif-cat:hover { outline: 3px solid var(--accent); outline-offset: -3px; }
+.gif-back { display: flex; align-items: center; gap: 4px; padding: 4px 6px 8px 0; font-weight: 700; font-size: 14px; color: var(--text); }
+.gif-back svg { width: 18px; height: 18px; color: var(--accent); }
+.gif-empty { text-align: center; color: var(--text-3); padding: 40px 10px; }
 .tp-more { color: var(--text-2); }
 .tp-more svg { width: 20px; height: 20px; }
 
