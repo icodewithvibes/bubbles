@@ -55,7 +55,8 @@ const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 const EMOJI_PICKER_URL = 'https://cdn.jsdelivr.net/npm/emoji-picker-element@1.29.1/index.js';
 
 // Bump APP_VERSION and rewrite PATCH_NOTES to show everyone a "What's new" popup once.
-const APP_VERSION = '1.2';
+const APP_VERSION = '1.2.1';
+const PATCH_INTRO = 'Since Yuriel Is A GOAT he decided to add working gifs';
 const PATCH_NOTES = [
   { icon: '🎬', title: 'GIFs', text: 'Tap <b>GIF</b> next to the message box to pick from hundreds of GIFs. Browse categories like LOL, Hug and Bruh, or search for things like "thanks" or "dance".' },
   { icon: '✨', title: 'Your own GIFs move', text: 'GIF files you send with <b>+</b>, paste or drag in now play instead of freezing on the first frame.' },
@@ -1847,7 +1848,7 @@ function maybeShowPatchNotes() {
 function openPatchNotes() {
   const m = modal(`
     <header class="modal-head"><h2>What's new in Bubbles ${APP_VERSION}</h2><button class="icon-btn sm" data-act="close-modal">${I.x}</button></header>
-    <div class="notes">${PATCH_NOTES.map((n, i) => `
+    <div class="notes">${PATCH_INTRO ? `<p class="notes-intro">${esc(PATCH_INTRO).replace('GOAT', '<span class="goat">GOAT</span>')}</p>` : ''}${PATCH_NOTES.map((n, i) => `
       <div class="note"><span class="note-icon">${n.icon}</span>
         <div><b>${esc(n.title)}</b><p>${n.text}</p>${n.btn ? `<button class="btn btn-sm" data-note="${i}">${esc(n.btn)}</button>` : ''}</div></div>`).join('')}
     </div>
