@@ -775,7 +775,7 @@ button.det-row:hover, label.det-row:hover { background: var(--hover); }
   background: radial-gradient(700px 500px at 50% 35%, #2c2c34, #0b0b0d);
 }
 .call-peer .avatar { --s: 120px; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
-.call:not(.live) .call-peer .avatar { animation: call-pulse 1.8s ease-in-out infinite; }
+.call:not(.live) .call-peer .avatar, .ring-screen .call-peer .avatar { animation: call-pulse 1.8s ease-in-out infinite; }
 @keyframes call-pulse { 50% { box-shadow: 0 0 0 16px rgba(255, 255, 255, .08), 0 10px 40px rgba(0, 0, 0, .5); } }
 .call-flag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 99px; background: rgba(255, 255, 255, .14); font-size: 13px; font-weight: 600; }
 .call-flag svg { width: 14px; height: 14px; }
@@ -786,14 +786,26 @@ button.det-row:hover, label.det-row:hover { background: var(--hover); }
 }
 .call-top b { font-size: 20px; }
 .call-top span { font-size: 14px; color: rgba(255, 255, 255, .8); font-variant-numeric: tabular-nums; }
+/* Your own picture: full screen while ringing (like FaceTime), then a corner tile you can drag. */
+.call { --pip-w: min(26vw, 200px); }
 .call-local {
-  position: absolute; right: 16px; top: calc(16px + env(safe-area-inset-top)); width: min(26vw, 200px); aspect-ratio: 3 / 4;
+  position: absolute; width: var(--pip-w); aspect-ratio: 3 / 4; touch-action: none; cursor: grab;
   object-fit: cover; border-radius: 14px; background: #222; transform: scaleX(-1);
   box-shadow: 0 6px 24px rgba(0, 0, 0, .5); border: 1px solid rgba(255, 255, 255, .15); transition: all .3s ease;
 }
-/* While ringing, your own camera fills the screen behind the caller card. */
-.call:not(.live) .call-local { inset: 0; width: 100%; height: 100%; border-radius: 0; border: 0; opacity: .35; aspect-ratio: auto; }
+.call-local.dragging { transition: none; cursor: grabbing; }
+.call-top, .call-cc, .call-bar { z-index: 2; }
+.call[data-corner^="t"] .call-local { top: calc(16px + env(safe-area-inset-top)); }
+.call[data-corner^="b"] .call-local { bottom: calc(112px + env(safe-area-inset-bottom)); }
+.call[data-corner$="l"] .call-local { left: 16px; }
+.call[data-corner$="r"] .call-local { right: 16px; }
+.call:not(.live) .call-local { inset: 0; width: 100%; height: 100%; border-radius: 0; border: 0; aspect-ratio: auto; cursor: default; }
 .call.self-off .call-local { visibility: hidden; }
+/* Keep captions clear of the tile when it sits in a bottom corner: beside it on wide screens, above it on phones. */
+.call.live[data-corner^="b"] .call-cc { width: min(calc(100vw - 2 * var(--pip-w) - 64px), 760px); }
+@media (max-width: 700px) {
+  .call.live[data-corner^="b"] .call-cc { width: min(92vw, 760px); bottom: calc(128px + var(--pip-w) * 4 / 3 + env(safe-area-inset-bottom)); }
+}
 .call-cc {
   position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(120px + env(safe-area-inset-bottom));
   width: min(92vw, 760px); display: flex; flex-direction: column; gap: 6px; pointer-events: none;
@@ -822,25 +834,25 @@ button.det-row:hover, label.det-row:hover { background: var(--hover); }
 .call-btn.end { background: #ff3b30; }
 .call-btn.end:hover { background: #ff5146; }
 
-.call-ring {
-  position: fixed; top: calc(14px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 410;
-  width: min(420px, calc(100vw - 32px)); display: flex; align-items: center; gap: 12px; padding: 12px 14px;
-  border-radius: 22px; background: var(--glass); color: var(--text); box-shadow: var(--shadow);
-  -webkit-backdrop-filter: saturate(180%) blur(24px); backdrop-filter: saturate(180%) blur(24px);
-  border: 1px solid var(--line); animation: ring-in .3s ease;
+.call-btn.accept { background: #34c759; }
+.call-btn.accept:hover { background: #3ed866; }
+.call-btn.big { width: 72px; height: 72px; }
+.call-btn.big svg { width: 30px; height: 30px; }
+
+/* Incoming call: full screen with your camera on behind it, like FaceTime. */
+.ring-screen { position: fixed; inset: 0; z-index: 410; background: #0b0b0d; color: #fff; overflow: hidden; animation: ring-in .3s ease; }
+@keyframes ring-in { from { opacity: 0; } }
+.ring-cam { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.ring-screen .call-top b { font-size: 26px; }
+.ring-actions {
+  position: absolute; left: 0; right: 0; bottom: calc(48px + env(safe-area-inset-bottom));
+  display: flex; justify-content: center; gap: min(30vw, 160px);
 }
-@keyframes ring-in { from { opacity: 0; transform: translate(-50%, -16px); } }
-.call-ring .avatar { --s: 52px; flex: none; }
-.cr-who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.cr-who b { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cr-who span { font-size: 13px; color: var(--text-2); display: flex; align-items: center; gap: 5px; }
-.cr-who svg { width: 14px; height: 14px; }
-.cr-btn { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none; }
-.cr-btn svg { width: 22px; height: 22px; }
-.cr-btn.decline { background: #ff3b30; }
-.cr-btn.accept { background: #34c759; animation: call-pulse 1.8s ease-in-out infinite; }
+.ring-actions span { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
+.ring-actions .accept { animation: call-pulse 1.8s ease-in-out infinite; }
 @media (max-width: 520px) {
+  .call { --pip-w: 30vw; }
   .call-btn { width: 52px; height: 52px; }
+  .call-btn.big { width: 68px; height: 68px; }
   .call-bar { gap: 10px; }
-  .call-local { width: 30vw; }
 }

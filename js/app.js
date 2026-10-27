@@ -56,7 +56,7 @@ const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 const EMOJI_PICKER_URL = 'https://cdn.jsdelivr.net/npm/emoji-picker-element@1.29.1/index.js';
 
 // Bump APP_VERSION and rewrite PATCH_NOTES to show everyone a "What's new" popup once.
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.4.1';
 const PATCH_INTRO = 'Since Yuriel Is A GOAT he decided to add video calls with live captions';
 // Optional poll shown in the popup. Votes live in polls/<id>/votes/<uid>; use a new id for a new poll.
 const PATCH_POLL = {
@@ -65,7 +65,7 @@ const PATCH_POLL = {
   options: ['🐐 A little GOAT', '🐐🐐 Pretty big GOAT', '🐐🐐🐐 Huge GOAT', '🐐🐐🐐🐐 Biggest GOAT ever'],
 };
 const PATCH_NOTES = [
-  { icon: '📹', title: 'Video calls', text: 'Open a chat with a friend and tap the <b>camera</b> at the top right to call them. They need Bubbles open to hear it ring.' },
+  { icon: '📹', title: 'Video calls', text: 'Open a chat with a friend and tap the <b>camera</b> at the top right to call them. Just like FaceTime, your camera is on while it rings, and you can drag your own picture to any corner. They need Bubbles open to hear it ring.' },
   { icon: '💬', title: 'Live captions', text: 'What each person says shows up as words at the bottom of the call, so you can follow along even with your sound off. Tap <b>CC</b> to hide or show them. Works best in Chrome or Edge.' },
   { icon: '🎬', title: 'GIFs', text: 'Tap <b>GIF</b> next to the message box to pick from hundreds of GIFs.' },
 ];

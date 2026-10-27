@@ -10,11 +10,9 @@ const { db } = F;
 const RING_FOR = 45e3;           // give up and mark the call missed after this
 const RECONNECT_FOR = 15e3;      // how long a dropped connection may try to come back
 const CAPTION_HOLD = 6e3;        // a finished caption stays this long after the last word
-const ICE = {
-  // A TURN server (self.ICE_SERVERS in firebase-config.js) gets calls through strict school/work networks.
-  iceServers: self.ICE_SERVERS?.length ? self.ICE_SERVERS
-    : [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
-};
+const CONNECT_FOR = 25e3;        // after answering, give up if the two devices can't reach each other
+const STUN = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+const BLOCKED = "Couldn't connect. This Wi-Fi blocks direct calls between devices, so calls need a relay server.";
 const AUDIO = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
 const SR = self.SpeechRecognition || self.webkitSpeechRecognition;
 
@@ -35,6 +33,7 @@ export function initCalls(context) {
     (e) => console.warn('call listener', e),
   );
   window.addEventListener('pagehide', onPageHide);
+  iceServers(); // fetch relay details ahead of time so calls start faster
 }
 
 export function stopCalls() {
@@ -64,7 +63,8 @@ export async function startCall(chatId, peer) {
   try {
     await getMedia();
     if (call?.id !== ref.id) return;
-    setupPeer();
+    await setupPeer();
+    if (call?.id !== ref.id) return;
     call.dc = call.pc.createDataChannel('captions');
     wireChannel(call.dc);
     const offer = await call.pc.createOffer();
@@ -103,16 +103,19 @@ function onIncoming(snap) {
 
 async function accept() {
   const inc = ringing;
+  const preview = inc?.preview;
+  if (inc) inc.preview = null; // the call takes over the camera that was already showing
   dismissRing();
-  if (!inc || call) return;
+  if (!inc || call) return preview?.getTracks().forEach((t) => t.stop());
   call = newCall({ id: inc.id, chatId: inc.chatId, peer: inc.from, role: 'callee' });
   call.created = true;
   call.status = 'connecting';
   renderCall();
   try {
-    await getMedia();
+    await getMedia(preview);
     if (call?.id !== inc.id) return;
-    setupPeer();
+    await setupPeer();
+    if (call?.id !== inc.id) return;
     listenCandidates();
     await call.pc.setRemoteDescription(inc.offer);
     flushRemoteCandidates();
@@ -120,6 +123,7 @@ async function accept() {
     await call.pc.setLocalDescription(answer);
     await F.updateDoc(callRef(inc.id), { answer: { type: answer.type, sdp: answer.sdp }, status: 'active' });
     call.answered = true;
+    watchConnect();
     call.unsubs.push(F.onSnapshot(callRef(inc.id), onCallDoc, () => {}));
   } catch (e) {
     failed(e);
@@ -139,6 +143,7 @@ function onCallDoc(snap) {
     call.answered = true;
     call.status = 'connecting';
     renderStatus();
+    watchConnect();
     call.pc.setRemoteDescription(d.answer).then(flushRemoteCandidates).catch(failed);
   }
   if (['ended', 'declined', 'missed'].includes(d.status)) {
@@ -158,14 +163,17 @@ function newCall(c) {
     unsubs: [], timers: [], created: false, answered: false, startedAt: 0,
     localCands: [], remoteCands: [], micOn: true, camOn: true, ccOn: pref('cc') !== 'off',
     peerMic: true, peerCam: true, peerCC: true, captions: new Map(), rec: null,
+    corner: ['tl', 'tr', 'bl', 'br'].includes(pref('pip')) ? pref('pip') : 'br',
   };
 }
 
-async function getMedia() {
+const openCamera = () => navigator.mediaDevices.getUserMedia({
+  audio: AUDIO, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+});
+
+async function getMedia(preview = null) {
   try {
-    call.local = await navigator.mediaDevices.getUserMedia({
-      audio: AUDIO, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-    });
+    call.local = preview || await openCamera();
   } catch (e) {
     if (e.name === 'NotAllowedError' && !/camera|video/i.test(e.message)) throw e;
     // No camera (or it's busy): carry on with sound and captions only.
@@ -178,8 +186,36 @@ async function getMedia() {
   renderControls();
 }
 
-function setupPeer() {
-  const pc = new RTCPeerConnection(ICE);
+// School and shared Wi-Fi often stop devices from reaching each other directly; a relay (TURN)
+// server in the middle gets those calls through. Set it up in firebase-config.js.
+let iceCache = null;
+async function iceServers() {
+  if (self.ICE_SERVERS?.length) return [...STUN, ...self.ICE_SERVERS];
+  if (!self.TURN_CREDENTIALS_URL) return STUN;
+  if (iceCache && Date.now() - iceCache.at < 30 * 60e3) return iceCache.list;
+  try {
+    const list = await (await fetch(self.TURN_CREDENTIALS_URL)).json();
+    if (Array.isArray(list) && list.length) {
+      iceCache = { at: Date.now(), list: [...STUN, ...list] };
+      return iceCache.list;
+    }
+  } catch { /* relay unreachable: try a direct connection anyway */ }
+  return STUN;
+}
+
+// The ring and handshake can succeed while the devices still can't reach each other; say so
+// instead of sitting on "Connecting…".
+function watchConnect() {
+  const id = call.id;
+  call.timers.push(setTimeout(() => {
+    if (call?.id !== id || call.startedAt) return;
+    ctx.toast(BLOCKED, 'error', 8000);
+    hangUp('ended');
+  }, CONNECT_FOR));
+}
+
+async function setupPeer() {
+  const pc = new RTCPeerConnection({ iceServers: await iceServers() });
   call.pc = pc;
   call.local.getTracks().forEach((t) => pc.addTrack(t, call.local));
   pc.ontrack = (e) => {
@@ -212,7 +248,7 @@ function setupPeer() {
       clearTimeout(call.dropTimer);
       call.dropTimer = setTimeout(() => { if (call?.pc === pc) { ctx.toast('Call dropped', 'error'); hangUp('ended'); } }, RECONNECT_FOR);
     } else if (s === 'failed') {
-      ctx.toast(call.startedAt ? 'Call dropped' : "Couldn't connect the call. One of you may be on a network that blocks calls.", 'error', 6000);
+      ctx.toast(call.startedAt ? 'Call dropped' : BLOCKED, 'error', 8000);
       hangUp('ended');
     }
   };
@@ -424,17 +460,22 @@ function pref(k) { try { return localStorage.getItem(`bubbles.${k}`); } catch { 
 function setPref(k, v) { try { localStorage.setItem(`bubbles.${k}`, v); } catch { /* private mode */ } }
 const duration = (t) => { const s = Math.floor(t / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
+// Like FaceTime: the incoming call fills the screen with your own camera already on behind it.
 function showRing() {
-  const u = ctx.user(ringing.from);
+  const inc = ringing;
+  const u = ctx.user(inc.from);
   const el = document.createElement('div');
-  el.className = 'call-ring';
+  el.className = 'ring-screen';
   el.setAttribute('role', 'alertdialog');
   el.setAttribute('aria-label', `Incoming video call from ${u.displayName || 'a friend'}`);
   el.innerHTML = `
-    ${avatar(u, 52)}
-    <div class="cr-who"><b>${esc(u.displayName || 'Someone')}</b><span>${I.video} Bubbles video call…</span></div>
-    <button class="cr-btn decline" data-call="decline" title="Decline">${I.phoneOff}</button>
-    <button class="cr-btn accept" data-call="accept" title="Accept">${I.video}</button>`;
+    <div class="call-peer">${avatar(u, 120)}</div>
+    <video class="ring-cam" autoplay playsinline muted hidden></video>
+    <header class="call-top"><b>${esc(u.displayName || 'Someone')}</b><span>Bubbles Video…</span></header>
+    <div class="ring-actions">
+      <span><button class="call-btn big end" data-call="decline" title="Decline">${I.phoneOff}</button>Decline</span>
+      <span><button class="call-btn big accept" data-call="accept" title="Accept">${I.video}</button>Accept</span>
+    </div>`;
   el.addEventListener('click', (e) => {
     const b = e.target.closest('[data-call]');
     if (b) (b.dataset.call === 'accept' ? accept : decline)();
@@ -442,14 +483,25 @@ function showRing() {
   $('#callRoot').append(el);
   N.startRing();
   if (document.visibilityState !== 'visible') {
-    N.notify({ title: `${u.displayName || 'Someone'} is calling`, body: 'Video call · open Bubbles to answer', chatId: ringing.chatId, messageId: `call-${ringing.id}` });
+    N.notify({ title: `${u.displayName || 'Someone'} is calling`, body: 'Video call · open Bubbles to answer', chatId: inc.chatId, messageId: `call-${inc.id}` });
   }
+  // Only turn the camera on by itself if it was allowed before; never pop a permission prompt mid-ring.
+  navigator.permissions?.query({ name: 'camera' }).then(async (p) => {
+    if (p.state !== 'granted') return;
+    const stream = await openCamera();
+    if (ringing !== inc) return stream.getTracks().forEach((t) => t.stop());
+    inc.preview = stream;
+    const v = $('.ring-cam', el);
+    v.srcObject = stream;
+    v.hidden = false;
+  }).catch(() => {});
 }
 
 function dismissRing() {
+  ringing?.preview?.getTracks().forEach((t) => t.stop());
   ringing = null;
   N.stopRing();
-  $('#callRoot .call-ring')?.remove();
+  $('#callRoot .ring-screen')?.remove();
 }
 
 function renderCall() {
@@ -474,28 +526,59 @@ function renderCall() {
     });
     $('#callRoot').append(el);
     if (call.local) $('#callLocal').srcObject = call.local;
+    dragPip($('#callLocal'), el);
   }
   const u = ctx.user(call.peer);
   const live = call.status === 'active' || call.status === 'reconnecting';
   el.classList.toggle('live', live);
   el.classList.toggle('self-off', !call.camOn);
+  el.dataset.corner = call.corner;
   $('#callName').textContent = u.displayName || 'Call';
-  // Before the video arrives (or with their camera off) show their picture instead.
-  const showPeer = !live || !call.peerCam;
+  // Like FaceTime, your own camera fills the screen until they pick up. Their picture shows
+  // instead when there's nothing to look at: no camera of yours before, or theirs off during.
+  const showPeer = live ? !call.peerCam : !call.camOn;
   $('#callPeer').hidden = !showPeer;
   $('#callPeer').innerHTML = showPeer
     ? `${avatar(u, 120)}${live && !call.peerMic ? `<span class="call-flag">${I.micOff} Muted</span>` : ''}` : '';
-  $('#callRemote').hidden = showPeer;
+  $('#callRemote').hidden = !live || showPeer;
   renderStatus();
   renderControls();
   renderCaptions();
+}
+
+// Drag your own picture anywhere during a call; it snaps to the nearest corner, like FaceTime.
+function dragPip(v, screen) {
+  let start = null;
+  v.addEventListener('pointerdown', (e) => {
+    if (!screen.classList.contains('live')) return;
+    start = { x: e.clientX, y: e.clientY };
+    v.setPointerCapture(e.pointerId);
+    v.classList.add('dragging');
+  });
+  v.addEventListener('pointermove', (e) => {
+    if (start) v.style.translate = `${e.clientX - start.x}px ${e.clientY - start.y}px`;
+  });
+  const drop = () => {
+    if (!start || !call) return;
+    start = null;
+    v.classList.remove('dragging');
+    const r = v.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    v.style.translate = '';
+    call.corner = `${cy < innerHeight / 2 ? 't' : 'b'}${cx < innerWidth / 2 ? 'l' : 'r'}`;
+    setPref('pip', call.corner);
+    screen.dataset.corner = call.corner;
+  };
+  v.addEventListener('pointerup', drop);
+  v.addEventListener('pointercancel', drop);
 }
 
 function renderStatus() {
   const el = $('#callStatus');
   if (!el || !call) return;
   const text = {
-    calling: 'Calling…', connecting: 'Connecting…', reconnecting: 'Reconnecting…',
+    calling: 'Bubbles Video…', connecting: 'Connecting…', reconnecting: 'Reconnecting…',
     active: call.startedAt ? duration(Date.now() - call.startedAt) : '',
   }[call.status];
   el.textContent = `${text}${call.status === 'active' && !call.peerMic ? ' · they\'re muted' : ''}`;

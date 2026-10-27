@@ -1,6 +1,6 @@
 /* Service worker: makes Bubbles installable, keeps the app shell available offline,
    and shows push notifications while the app is closed. */
-const CACHE = 'bubbles-v9';
+const CACHE = 'bubbles-v10';
 const SHELL = [
   './', './index.html', './css/style.css', './firebase-config.js', './manifest.webmanifest',
   './js/app.js', './js/call.js', './js/firebase.js', './js/gifs.js', './js/notify.js', './js/util.js',

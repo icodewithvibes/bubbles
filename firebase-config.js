@@ -14,3 +14,9 @@ self.FIREBASE_CONFIG = {
 // Firebase console → Project settings → Cloud Messaging → Web Push certificates → Generate key pair.
 // Leave it empty to only notify while the app is open (including minimized or in the background).
 self.FIREBASE_VAPID_KEY = "";
+
+// Relay (TURN) server for video calls. School and shared Wi-Fi often block devices from reaching
+// each other directly, and calls then only connect through a relay. With a free Metered account
+// (metered.ca → TURN Server → your app), paste the "credentials API" link here; it looks like
+// https://YOURAPP.metered.live/api/v1/turn/credentials?apiKey=…
+self.TURN_CREDENTIALS_URL = "https://bubbles-chat.metered.live/api/v1/turn/credentials?apiKey=e1d1d9f7075d3a72729815a564988c2c2b42";
