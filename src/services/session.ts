@@ -31,7 +31,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore'
 
-import { initCalls, stopCalls } from '@/kit/call.js'
+import { inCall, initCalls, stopCalls } from '@/kit/call.js'
 import { deleteChunks, isChunked } from '@/lib/chunks'
 import { deleteMedia } from '@/lib/media'
 import * as N from '@/kit/notify.js'
@@ -205,6 +205,7 @@ async function onAuth(u: User | null) {
 
 export function boot() {
   N.registerSW()
+  watchForUpdates()
   onAuthStateChanged(auth, onAuth)
   window.addEventListener('hashchange', route)
   document.addEventListener('visibilitychange', onVisibility)
@@ -451,6 +452,7 @@ export function postMessage(
     system = false,
     effect,
     media,
+    sticker,
     id,
   }: {
     text?: string
@@ -458,7 +460,8 @@ export function postMessage(
     replyTo?: Message['replyTo'] | null
     system?: boolean
     effect?: string
-    media?: Message['media']
+    media?: Message["media"]
+    sticker?: string
     /** Pre-allocated id (media uploads use it as their Storage folder). */
     id?: string
   },
@@ -471,7 +474,8 @@ export function postMessage(
   if (system) msg.system = true
   if (effect) msg.effect = effect
   if (media) msg.media = media
-  const label = media ? MEDIA_LABEL[media.kind] : image ? (isGif(image) ? 'GIF' : '📷 Photo') : ''
+  if (sticker) msg.sticker = sticker
+  const label = sticker ? "🩷 Sticker" : media ? MEDIA_LABEL[media.kind] : image ? (isGif(image) ? 'GIF' : '📷 Photo') : ''
   if (get().urgentNext && !system) {
     msg.urgent = true
     set({ urgentNext: false })
@@ -520,7 +524,7 @@ export function unsend(m: Message) {
   const c = get().chats[get().msgChatId ?? '']
   if (!c) return
   const b = writeBatch(db)
-  b.update(msgRef(c.id, m.id), { deleted: true, text: '', image: deleteField(), media: deleteField(), effect: deleteField(), transcript: deleteField() })
+  b.update(msgRef(c.id, m.id), { deleted: true, text: '', image: deleteField(), media: deleteField(), sticker: deleteField(), effect: deleteField(), transcript: deleteField() })
   void deleteMedia(m.media)
   if (m.media && isChunked(m.media.url)) void deleteChunks(c.id, m.id)
   if (c.lastMessage?.id === m.id) b.update(chatRef(c.id), { 'lastMessage.text': 'unsent a message', 'lastMessage.system': true })
@@ -761,3 +765,42 @@ export { N }
 /** Sender adds the Whisper transcript after a voice message is sent. */
 export const setTranscript = (chatId: string, msgId: string, transcript: string) =>
   updateDoc(msgRef(chatId, msgId), { transcript: transcript.slice(0, 4000) }).catch((e) => console.warn('transcript', e))
+
+// ============================================================================
+// Auto-update (from v1): GitHub Pages re-stamps index.html on every deploy.
+// Reload once nobody's mid-message, in a dialog, or on a call.
+// ============================================================================
+let deployedAt: string | null = null
+let updateFound = false
+
+function reloadWhenIdle() {
+  const typing = [...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')].some(
+    (el) => el.offsetParent && el.type !== 'checkbox' && el.value.trim(),
+  )
+  if (typing || inCall() || get().modal || document.querySelector('.popover, .fx-picker, .rec-bar')) return
+  location.reload()
+}
+
+async function checkForUpdate() {
+  if (updateFound) return reloadWhenIdle()
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}index.html`, { method: 'HEAD', cache: 'no-store' })
+    const stamp = res.ok && (res.headers.get('last-modified') || res.headers.get('etag'))
+    if (!stamp) return
+    if (deployedAt === null) deployedAt = stamp
+    else if (stamp !== deployedAt) {
+      updateFound = true
+      // Give the deploy a moment to reach every CDN edge before loading the new files.
+      setTimeout(reloadWhenIdle, 15e3)
+    }
+  } catch {
+    /* offline: try again next time */
+  }
+}
+
+export function watchForUpdates() {
+  if (import.meta.env.DEV) return
+  void checkForUpdate()
+  setInterval(checkForUpdate, 60e3)
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && void checkForUpdate())
+}

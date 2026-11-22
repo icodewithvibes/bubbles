@@ -22,6 +22,16 @@ service cloud.firestore {
       match /tokens/{token} {
         allow read, write: if signedIn() && me() == uid;
       }
+
+      // "My Stickers": stickers this user made from their photos. Private to them.
+      match /stickers/{stickerId} {
+        allow read, delete: if signedIn() && me() == uid;
+        allow create: if signedIn() && me() == uid
+          && request.resource.data.keys().hasOnly(['url', 'at'])
+          && request.resource.data.url is string
+          && request.resource.data.url.size() < 400000;
+        allow update: if false;
+      }
     }
 
     // username → uid lookup for "Add Friend". Usernames are permanent.
@@ -163,7 +173,9 @@ service cloud.firestore {
           && me() in chatAfter().members
           && request.resource.data.senderId == me()
           && request.resource.data.createdAt == request.time
-          && request.resource.data.keys().hasOnly(['senderId', 'createdAt', 'text', 'image', 'replyTo', 'system', 'urgent', 'effect', 'media'])
+          && request.resource.data.keys().hasOnly(['senderId', 'createdAt', 'text', 'image', 'replyTo', 'system', 'urgent', 'effect', 'media', 'sticker'])
+          // v2: a sticker (Tenor URL or a small custom sticker image).
+          && (!('sticker' in request.resource.data) || (request.resource.data.sticker is string && request.resource.data.sticker.size() < 400000))
           && request.resource.data.text is string
           && request.resource.data.text.size() <= 4000
           && (!('image' in request.resource.data) || (request.resource.data.image is string && request.resource.data.image.size() < 900000))
@@ -178,7 +190,7 @@ service cloud.firestore {
         allow update: if signedIn() && me() in chatNow().members && (
           // Sender edits, unsends, or attaches the voice transcript.
           (resource.data.senderId == me()
-            && changed().hasOnly(['text', 'edited', 'editedAt', 'deleted', 'image', 'media', 'effect', 'transcript'])
+            && changed().hasOnly(['text', 'edited', 'editedAt', 'deleted', 'image', 'media', 'effect', 'transcript', 'sticker'])
             && (!('transcript' in request.resource.data) || (request.resource.data.transcript is string && request.resource.data.transcript.size() <= 4000)))
           // Anyone in the chat changes only their own reaction.
           || (changed().hasOnly(['reactions'])

@@ -38,6 +38,7 @@ import { themeHasBackdrop } from '@/themes'
 import { EffectPicker, effectLabel, fxSeen, isBubbleEffect, isScreenEffect, markFxSeen, playScreenEffect, type EffectId } from './Effects'
 import { CameraButton, MediaContent, MicButton, UploadBar, sendFiles } from './Media'
 import { openEmojiPicker, openGifPicker } from './Pickers'
+import { openStickerPicker, stickerUrl } from './Stickers'
 import { ChatAvatar, Ic, Logo, Modal, Moon, Rich, UserAvatar, closePopover, isPopoverOpen, openMenu, openPopover } from './ui'
 
 const TAPBACKS = ['❤️', '👍', '👎', '😂', '‼️', '❓']
@@ -54,6 +55,13 @@ export function sendGif(url: string) {
   const c = get().chats[get().msgChatId ?? '']
   if (!c) return
   void postMessage(c, { image: url, replyTo: get().replyTo })
+  set({ replyTo: null })
+}
+
+export function sendSticker(url: string) {
+  const c = get().chats[get().msgChatId ?? '']
+  if (!c) return
+  void postMessage(c, { sticker: url, replyTo: get().replyTo })
   set({ replyTo: null })
 }
 
@@ -122,7 +130,7 @@ function openMsgMenu(m: Message, anchor: Element, at?: { x: number; y: number })
     [
       { id: 'react', label: 'Add Reaction', icon: <Ic name="smile" />, run: () => setTimeout(() => openTapback(m, content), 0) },
       { id: 'reply', label: 'Reply', icon: <Ic name="reply" />, run: () => startReply(m) },
-      mine && !m.image && !m.media && { id: 'edit', label: 'Edit', icon: <Ic name="pencil" />, run: () => startEdit(m) },
+      mine && !m.image && !m.media && !m.sticker && { id: 'edit', label: 'Edit', icon: <Ic name="pencil" />, run: () => startEdit(m) },
       !!m.effect && m.effect !== 'invisible' && { id: 'replay', label: `Replay ${effectLabel(m.effect)}`, icon: <span>✨</span>, run: () => replayEffect(m) },
       !!m.text && { id: 'copy', label: 'Copy Text', icon: <Ic name="copy" />, run: () => void navigator.clipboard.writeText(m.text).then(() => toast('Copied')) },
       mine && '-',
@@ -162,7 +170,7 @@ const MessageRow = memo(function MessageRow({ m, mine, start, end, group, uid }:
     return () => window.removeEventListener('bubbles:replay', replay)
   }, [m.id])
   const fxClass = bubbleFx ? `fx-${bubbleFx} ${play ? 'fx-play' : ''} ${revealed ? 'revealed' : ''}` : ''
-  const jumbo = !m.image && !m.media && isEmojiOnly(m.text)
+  const jumbo = !m.image && !m.media && !m.sticker && isEmojiOnly(m.text)
   const reactions = Object.entries(m.reactions ?? {})
   const grouped: Record<string, string[]> = {}
   reactions.forEach(([u, e]) => (grouped[e] ||= []).push(u))
@@ -215,7 +223,9 @@ const MessageRow = memo(function MessageRow({ m, mine, start, end, group, uid }:
             if (sp) sp.classList.add('shown')
           }}
         >
-          {m.image ? (
+          {m.sticker ? (
+            <img className={`sticker-img ${fxClass}`} src={stickerUrl(m.sticker)} alt="Sticker" draggable={false} />
+          ) : m.image ? (
             <>
               <img className="msg-img" src={m.image} alt={isGif(m.image) ? 'GIF' : 'Photo'} onClick={() => openLightbox(m.image!)} />
               {m.text && (
@@ -253,7 +263,7 @@ const MessageRow = memo(function MessageRow({ m, mine, start, end, group, uid }:
             <button title="Reply" onClick={() => startReply(m)}>
               <Ic name="reply" />
             </button>
-            {mine && !m.image && (
+            {mine && !m.image && !m.media && !m.sticker && (
               <button title="Edit" onClick={() => startEdit(m)}>
                 <Ic name="pencil" />
               </button>
@@ -693,6 +703,14 @@ function Composer({ c }: { c: Chat }) {
           onClick={(e) => (isPopoverOpen('emoji-pop') ? closePopover() : openEmojiPicker(e.currentTarget, composerApi.insert))}
         >
           <Ic name="smile" />
+        </button>
+        <button
+          className="comp-plus comp-sticker"
+          title="Stickers"
+          data-keep-pop
+          onClick={(e) => (isPopoverOpen('sticker-pop') ? closePopover() : openStickerPicker(e.currentTarget, sendSticker))}
+        >
+          <Ic name="sticker" />
         </button>
         <button className="comp-plus comp-gif" title="GIFs" data-keep-pop onClick={(e) => (isPopoverOpen('gif-pop') ? closePopover() : openGifPicker(e.currentTarget, sendGif))}>
           GIF

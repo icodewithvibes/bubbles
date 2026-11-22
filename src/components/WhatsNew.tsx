@@ -7,7 +7,7 @@ import { useRef, type ReactNode } from 'react'
 import { closeModal, get, openModal } from '@/store'
 import { Ic } from './ui'
 
-export const APP_VERSION = '2.0.0'
+export const APP_VERSION = '2.1.0'
 
 interface Note {
   icon: string
@@ -38,6 +38,17 @@ const NOTES: Note[] = [
       </>
     ),
     hue: 320,
+  },
+  {
+    icon: '🩷',
+    title: 'Stickers',
+    text: (
+      <>
+        500+ meme stickers, plus <b>Make a Sticker</b> to cut yourself (or your cat) out of any photo.
+      </>
+    ),
+    wide: true,
+    hue: 340,
   },
   {
     icon: '🎤',

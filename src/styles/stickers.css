@@ -1,0 +1,75 @@
+/* ==========================================================================
+   Stickers
+   ========================================================================== */
+
+/* In the chat: no bubble, just the sticker (like iMessage). */
+.sticker-img {
+  display: block; width: auto; height: auto; max-width: min(170px, 46vw); max-height: 170px; object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .18)); user-select: none;
+}
+.msg-content:has(> .sticker-img) .tapbacks { top: -8px; }
+
+/* ---------- Picker ---------- */
+.popover.sticker-pop {
+  width: min(380px, calc(100vw - 16px)); height: min(460px, 70vh); display: flex; flex-direction: column; overflow: hidden; padding: 0;
+}
+.stk-head { padding: 10px 10px 6px; }
+.stk-search {
+  width: 100%; height: 34px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--bg-2); color: var(--text);
+  padding: 0 12px; font: inherit; font-size: 14px;
+}
+.stk-title { padding: 2px 12px 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); }
+.stk-body { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+.stk-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.stk-tile { position: relative; aspect-ratio: 1; }
+.stk-btn {
+  width: 100%; height: 100%; display: grid; place-items: center; border-radius: 12px; padding: 6px; transition: background .12s, transform .12s;
+}
+.stk-btn:hover { background: var(--hover); transform: scale(1.06); }
+.stk-btn img { max-width: 100%; max-height: 100%; object-fit: contain; pointer-events: none; }
+.stk-del {
+  position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; border-radius: 50%; display: none; place-items: center;
+  background: var(--danger); color: #fff;
+}
+.stk-del svg { width: 12px; height: 12px; }
+.stk-tile:hover .stk-del { display: grid; }
+.stk-empty { grid-column: 1 / -1; text-align: center; color: var(--text-2); font-size: 13.5px; padding: 24px 8px; }
+.stk-make {
+  aspect-ratio: 1; border-radius: 12px; border: 2px dashed var(--line-2); display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--accent); text-align: center; padding: 4px;
+}
+.stk-make span { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; }
+.stk-make span svg { width: 16px; height: 16px; }
+.stk-make:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.stk-tabs {
+  display: flex; gap: 2px; padding: 6px; border-top: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; flex: none;
+}
+.stk-tabs::-webkit-scrollbar { display: none; }
+.stk-tabs button { flex: none; width: 34px; height: 34px; border-radius: 9px; font-size: 18px; display: grid; place-items: center; }
+.stk-tabs button:hover { background: var(--hover); }
+.stk-tabs button.on { background: var(--bg-3); box-shadow: inset 0 0 0 1.5px var(--accent); }
+
+/* Composer icon sizing matches the other round buttons. */
+.comp-sticker svg { width: 19px; height: 19px; }
+
+/* ---------- Make a Sticker ---------- */
+.modal.make-sticker { width: min(420px, calc(100vw - 24px)); }
+.mk-stage { padding: 4px 16px 12px; }
+.mk-pick {
+  width: 100%; min-height: 220px; border-radius: 16px; border: 2px dashed var(--line-2); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px; padding: 20px; text-align: center; color: var(--text);
+}
+.mk-pick:hover { border-color: var(--accent); }
+.mk-pick svg { width: 34px; height: 34px; color: var(--accent); }
+.mk-pick small, .mk-working small { color: var(--text-2); font-size: 13px; max-width: 260px; }
+.mk-working { min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.mk-spinner {
+  width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line-2); border-top-color: var(--accent); animation: mk-spin .8s linear infinite;
+}
+@keyframes mk-spin { to { transform: rotate(360deg); } }
+.mk-preview {
+  min-height: 220px; display: grid; place-items: center; border-radius: 16px; padding: 16px;
+  background: repeating-conic-gradient(var(--bg-3) 0 25%, var(--bg-2) 0 50%) 0 0 / 18px 18px;
+}
+.mk-preview img { max-width: 100%; max-height: 260px; }
+.mk-outline { margin-top: 10px; }

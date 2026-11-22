@@ -62,6 +62,8 @@ export interface Message {
   /** iMessage-style send effect (bubble or screen). */
   effect?: string
   media?: Media
+  /** Sticker image (Tenor URL or a custom sticker data URL). */
+  sticker?: string
   /** Whisper transcript of a voice message. */
   transcript?: string
   pending?: boolean
