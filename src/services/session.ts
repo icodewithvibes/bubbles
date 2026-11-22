@@ -23,6 +23,8 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  Timestamp,
+  getDocs,
   setDoc,
   updateDoc,
   where,
@@ -66,6 +68,8 @@ const live = {
   msgUnsub: null as Unsubscribe | null,
   wallUnsub: null as Unsubscribe | null,
   msgLimit: 50,
+  loadingNewer: false,
+  loadingOlder: false,
   sessionStart: Date.now(),
   lastNotified: {} as Record<string, number>,
   pendingSignupName: null as string | null,
@@ -359,7 +363,7 @@ export function route() {
   const changed = r.view !== prev.view || (r.view === 'chat' && prev.view === 'chat' ? r.id !== prev.id : r.view === 'chat')
   if (changed) {
     stopTyping()
-    set({ replyTo: null, editing: null, urgentNext: false, detailsOpen: false })
+    set({ replyTo: null, editing: null, urgentNext: false, detailsOpen: false, searchOpen: false })
   }
   set({ route: r })
   if (r.view === 'chat') {
@@ -381,9 +385,102 @@ function subscribeMessages(chatId: string) {
   if (get().msgChatId === chatId) return
   live.msgUnsub?.()
   live.msgLimit = 50
-  set({ msgChatId: chatId, msgs: [], hasMore: false })
+  set({ msgChatId: chatId, msgs: [], hasMore: false, history: false, hasNewer: false, jumpTarget: null })
   listenMessages()
   listenWallpaper(chatId)
+}
+
+// ============================================================================
+// History mode: look at any point in a conversation (search results, dates,
+// "first messages") without loading everything in between. The live listener
+// is paused; scrolling loads pages older/newer; reaching the end goes live.
+// ============================================================================
+const PAGE = 50
+const toMsg = (d: import('firebase/firestore').QueryDocumentSnapshot) =>
+  ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }) as Message
+const msgsCol = (chatId: string) => collection(db, 'chats', chatId, 'messages')
+
+/** Show the conversation around `at` (ms). `targetId` gets scrolled to and highlighted. */
+export async function jumpTo(at: number, targetId?: string) {
+  const chatId = get().msgChatId
+  if (!chatId) return
+  live.msgUnsub?.()
+  live.msgUnsub = null
+  const T = Timestamp.fromMillis(at)
+  try {
+    const [before, after] = await Promise.all([
+      getDocs(query(msgsCol(chatId), where('createdAt', '<=', T), orderBy('createdAt', 'desc'), limit(25))),
+      getDocs(query(msgsCol(chatId), where('createdAt', '>', T), orderBy('createdAt', 'asc'), limit(40))),
+    ])
+    if (get().msgChatId !== chatId) return
+    const msgs = [...before.docs.map(toMsg).reverse(), ...after.docs.map(toMsg)]
+    // Nothing newer to page through: this already is the latest, so stay live.
+    if (after.size < 40) return void backToLatest(targetId ?? msgs.find((m) => ms(m.createdAt) >= at)?.id ?? null)
+    set({
+      msgs,
+      history: true,
+      hasMore: before.size >= 25,
+      hasNewer: true,
+      jumpTarget: targetId ?? msgs.find((m) => ms(m.createdAt) >= at)?.id ?? msgs[0]?.id ?? null,
+    })
+  } catch (e) {
+    console.error(e)
+    toast("Couldn't load those messages", 'error')
+    backToLatest()
+  }
+}
+
+/** The very first messages ever sent in this chat. */
+export async function jumpToFirst() {
+  const chatId = get().msgChatId
+  if (!chatId) return
+  const first = await getDocs(query(msgsCol(chatId), orderBy('createdAt', 'asc'), limit(1))).catch(() => null)
+  const m = first?.docs[0]
+  if (!m) return toast('No messages yet')
+  await jumpTo(ms(m.data().createdAt), m.id)
+}
+
+export function backToLatest(targetId: string | null = null) {
+  live.msgLimit = 50
+  set({ history: false, hasNewer: false, jumpTarget: targetId })
+  listenMessages()
+}
+
+/** History mode: load the next page of newer messages (or go live at the end). */
+export async function loadNewer() {
+  const { msgChatId: chatId, msgs, history } = get()
+  if (!chatId || !history || live.loadingNewer) return
+  const last = msgs.at(-1)
+  if (!last) return backToLatest()
+  live.loadingNewer = true
+  try {
+    const snap = await getDocs(query(msgsCol(chatId), where('createdAt', '>', last.createdAt), orderBy('createdAt', 'asc'), limit(PAGE)))
+    if (get().msgChatId !== chatId || !get().history) return
+    if (snap.size < PAGE) {
+      // Caught up: switch to the live feed (keeps everything above in place).
+      live.msgLimit = Math.max(50, msgs.length + snap.size)
+      set({ history: false, hasNewer: false })
+      listenMessages()
+      return
+    }
+    set({ msgs: [...msgs, ...snap.docs.map(toMsg)] })
+  } finally {
+    live.loadingNewer = false
+  }
+}
+
+async function loadOlderHistory() {
+  const { msgChatId: chatId, msgs } = get()
+  const first = msgs[0]
+  if (!chatId || !first || live.loadingOlder) return
+  live.loadingOlder = true
+  try {
+    const snap = await getDocs(query(msgsCol(chatId), where('createdAt', '<', first.createdAt), orderBy('createdAt', 'desc'), limit(PAGE)))
+    if (get().msgChatId !== chatId || !get().history) return
+    set({ msgs: [...snap.docs.map(toMsg).reverse(), ...msgs], hasMore: snap.size >= PAGE })
+  } finally {
+    live.loadingOlder = false
+  }
 }
 
 function listenMessages() {
@@ -411,6 +508,7 @@ function listenMessages() {
 
 export function loadOlder() {
   if (!get().hasMore) return
+  if (get().history) return void loadOlderHistory()
   live.msgLimit += 50
   listenMessages()
 }

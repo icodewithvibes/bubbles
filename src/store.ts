@@ -28,6 +28,12 @@ export interface AppState {
   msgChatId: string | null
   msgs: Message[]
   hasMore: boolean
+  /** Viewing older messages (search result, date jump); the live feed is paused. */
+  history: boolean
+  hasNewer: boolean
+  /** Message to scroll to and highlight once rendered. */
+  jumpTarget: string | null
+  searchOpen: boolean
   wall: string | null
   replyTo: { id: string; senderId: string; text: string } | null
   editing: Message | null
@@ -54,6 +60,10 @@ export const initialState: AppState = {
   msgChatId: null,
   msgs: [],
   hasMore: false,
+  history: false,
+  hasNewer: false,
+  jumpTarget: null,
+  searchOpen: false,
   wall: null,
   replyTo: null,
   editing: null,

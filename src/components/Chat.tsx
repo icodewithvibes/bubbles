@@ -20,6 +20,8 @@ import type { Chat, Message } from '@/lib/types'
 import {
   editMessage,
   leaveGroup,
+  backToLatest,
+  loadNewer,
   loadOlder,
   maybeMarkRead,
   noteTyping,
@@ -38,6 +40,7 @@ import { themeHasBackdrop } from '@/themes'
 import { EffectPicker, effectLabel, fxSeen, isBubbleEffect, isScreenEffect, markFxSeen, playScreenEffect, type EffectId } from './Effects'
 import { CameraButton, MediaContent, MicButton, UploadBar, sendFiles } from './Media'
 import { openEmojiPicker, openGifPicker } from './Pickers'
+import { SearchPanel } from './Search'
 import { openStickerPicker, stickerUrl } from './Stickers'
 import { ChatAvatar, Ic, Logo, Modal, Moon, Rich, UserAvatar, closePopover, isPopoverOpen, openMenu, openPopover } from './ui'
 
@@ -396,6 +399,8 @@ function Messages({ c }: { c: Chat }) {
   const older = useRef<{ h: number; top: number } | null>(null)
   const lastKey = useRef<string | undefined>(undefined)
   const [jump, setJump] = useState(false)
+  const history = useStore((s) => s.history)
+  const jumpTarget = useStore((s) => s.jumpTarget)
 
   const near = useCallback((px = 120) => {
     const el = ref.current
@@ -426,18 +431,30 @@ function Messages({ c }: { c: Chat }) {
     const el = ref.current
     if (!el) return
     const newLast = msgs.at(-1)?.id
-    if (older.current) {
+    const target = jumpTarget && document.getElementById(`m-${jumpTarget}`)
+    if (target) {
+      // Search result / date jump: center it and flash it, like iMessage.
+      target.scrollIntoView({ block: 'center' })
+      target.classList.remove('flash')
+      void target.offsetWidth
+      target.classList.add('flash')
+      setTimeout(() => target.classList.remove('flash'), 1800)
+      set({ jumpTarget: null })
+      older.current = null
+      setJump(false)
+    } else if (older.current) {
       el.scrollTop = el.scrollHeight - older.current.h + older.current.top
       older.current = null
     } else {
       const mineJustSent = msgs.at(-1)?.senderId === get().uid && newLast !== lastKey.current
-      if (first.current || stick.current || mineJustSent) toBottom()
-      else if (newLast !== lastKey.current && lastKey.current) setJump(true)
+      // In history mode new pages append below; never yank the view to the bottom.
+      if (!history && (first.current || stick.current || mineJustSent)) toBottom()
+      else if (!history && newLast !== lastKey.current && lastKey.current) setJump(true)
     }
     if (msgs.length) first.current = false
     lastKey.current = newLast
     stick.current = near()
-  }, [msgs, near])
+  }, [msgs, near, jumpTarget, history])
 
   return (
     <div className="chat-body">
@@ -453,6 +470,8 @@ function Messages({ c }: { c: Chat }) {
             older.current = { h: el.scrollHeight, top: el.scrollTop }
             loadOlder()
           }
+          // Viewing older messages: keep loading newer ones as you scroll down.
+          if (history && near(500)) void loadNewer()
           maybeMarkRead()
           if (isPopoverOpen('tapback-picker')) closePopover()
         }}
@@ -482,16 +501,22 @@ function Messages({ c }: { c: Chat }) {
         </div>
         <Typing c={c} />
       </div>
-      {jump && (
-        <button
-          className="jump"
-          onClick={() => {
-            toBottom()
-            setJump(false)
-          }}
-        >
-          <Ic name="down" /> New messages
+      {history ? (
+        <button className="jump history-jump" onClick={() => backToLatest()}>
+          <Ic name="down" /> Jump to latest
         </button>
+      ) : (
+        jump && (
+          <button
+            className="jump"
+            onClick={() => {
+              toBottom()
+              setJump(false)
+            }}
+          >
+            <Ic name="down" /> New messages
+          </button>
+        )
       )}
     </div>
   )
@@ -502,6 +527,7 @@ function Messages({ c }: { c: Chat }) {
 // ============================================================================
 function ChatHead({ c }: { c: Chat }) {
   const detailsOpen = useStore((s) => s.detailsOpen)
+  const searchOpen = useStore((s) => s.searchOpen)
   useStore((s) => s.tick)
   useStore((s) => s.users)
   const dm = c.type === 'dm'
@@ -535,7 +561,14 @@ function ChatHead({ c }: { c: Chat }) {
             <Ic name="video" />
           </button>
         )}
-        <button className={`icon-btn ch-info ${detailsOpen ? 'on' : ''}`} title="Details" onClick={() => set({ detailsOpen: !detailsOpen })}>
+        <button
+          className={`icon-btn ch-search ${searchOpen ? 'on' : ''}`}
+          title="Search & jump to date (Ctrl+F)"
+          onClick={() => set({ searchOpen: !searchOpen, detailsOpen: false })}
+        >
+          <Ic name="search" />
+        </button>
+        <button className={`icon-btn ch-info ${detailsOpen ? 'on' : ''}`} title="Details" onClick={() => set({ detailsOpen: !detailsOpen, searchOpen: false })}>
           <Ic name="info" />
         </button>
       </span>
@@ -949,6 +982,18 @@ export function ChatView({ id }: { id: string }) {
   const loaded = useStore((s) => s.chatsLoaded)
   const wall = useStore((s) => s.wall)
   const detailsOpen = useStore((s) => s.detailsOpen)
+  const searchOpen = useStore((s) => s.searchOpen)
+  // Ctrl/Cmd+F opens search inside a conversation, like iMessage.
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        set({ searchOpen: true, detailsOpen: false })
+      }
+    }
+    document.addEventListener('keydown', k)
+    return () => document.removeEventListener('keydown', k)
+  }, [])
   // Over an animated theme, bubbles use the same tail-less readable style as a photo background.
   const themed = useStore((s) => themeHasBackdrop(s.appTheme))
   const [drop, setDrop] = useState(false)
@@ -966,7 +1011,7 @@ export function ChatView({ id }: { id: string }) {
     ) : null
 
   return (
-    <section className={`chat ${detailsOpen ? 'details-open' : ''}`}>
+    <section className={`chat ${detailsOpen || searchOpen ? 'details-open' : ''}`}>
       <div
         className={`chat-col ${wall || themed ? 'has-wall' : ''} ${wall ? 'own-wall' : ''} ${drop ? 'drop' : ''}`}
         style={wall ? { backgroundImage: `url("${wall}")` } : undefined}
@@ -991,6 +1036,7 @@ export function ChatView({ id }: { id: string }) {
         <Composer c={c} />
       </div>
       {detailsOpen && <Details c={c} />}
+      {searchOpen && <SearchPanel c={c} />}
     </section>
   )
 }

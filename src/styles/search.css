@@ -1,0 +1,72 @@
+/* ==========================================================================
+   Search & Timeline panel
+   ========================================================================== */
+.search-panel { display: flex; flex-direction: column; }
+.sp-search {
+  position: relative; margin: 4px 14px 6px; display: flex; align-items: center;
+}
+.sp-search input {
+  width: 100%; height: 36px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--bg); color: var(--text);
+  padding: 0 12px 0 34px; font: inherit; font-size: 14.5px;
+}
+.sp-search input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.sp-search-ic { position: absolute; left: 10px; width: 17px; height: 17px; color: var(--text-3); display: grid; place-items: center; pointer-events: none; }
+.sp-search-ic svg { width: 17px; height: 17px; }
+.sp-status { display: flex; align-items: center; gap: 6px; padding: 0 16px 6px; font-size: 12px; color: var(--text-3); min-height: 18px; }
+.sp-spin { width: 12px; height: 12px; border-width: 2px; }
+.sp-results { flex: 1; overflow-y: auto; padding-bottom: 16px; }
+.sp-empty { color: var(--text-2); text-align: center; padding: 28px 16px; font-size: 14px; }
+
+/* Results */
+.sp-hit {
+  width: 100%; display: flex; gap: 10px; align-items: flex-start; text-align: left; padding: 9px 14px; border-top: 1px solid var(--line);
+}
+.sp-hit:hover { background: var(--hover); }
+.sp-hit-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sp-hit-top { display: flex; align-items: baseline; gap: 8px; }
+.sp-hit-top b { font-size: 13.5px; }
+.sp-hit-top small { margin-left: auto; color: var(--text-3); font-size: 11.5px; white-space: nowrap; }
+.sp-hit-text { font-size: 13.5px; color: var(--text-2); line-height: 1.35; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.sp-hit-text mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text); border-radius: 3px; padding: 0 1px; }
+
+/* Jump to */
+.sp-quick { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 14px 10px; }
+.sp-chip {
+  padding: 6px 11px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--bg-3); border: 1px solid var(--line);
+}
+.sp-chip:hover { border-color: var(--accent); }
+.sp-chip.primary { background: var(--accent); color: #fff; border-color: transparent; }
+.sp-date { display: flex; align-items: center; gap: 10px; padding: 0 14px 12px; font-size: 13.5px; color: var(--text-2); }
+.sp-date input {
+  flex: 1; height: 32px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--bg); color: var(--text); padding: 0 8px; font: inherit; color-scheme: inherit;
+}
+
+/* Timeline */
+.sp-month-row {
+  position: relative; width: 100%; display: flex; align-items: center; gap: 8px; padding: 9px 14px; text-align: left; overflow: hidden;
+}
+.sp-month-row:hover { background: var(--hover); }
+.sp-month-row b { font-size: 14px; position: relative; }
+.sp-month-row small { margin-left: auto; color: var(--text-3); font-size: 12px; position: relative; }
+.sp-bar { position: absolute; left: 0; bottom: 0; height: 2px; background: color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 2px; }
+.sp-chev { width: 14px; height: 14px; display: grid; place-items: center; color: var(--text-3); transition: transform .15s; position: relative; }
+.sp-chev svg { width: 14px; height: 14px; }
+.sp-month.open .sp-chev { transform: rotate(90deg); }
+.sp-weeks { padding: 0 8px 6px 30px; display: flex; flex-direction: column; }
+.sp-week { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 8px; font-size: 13.5px; text-align: left; }
+.sp-week:hover { background: var(--hover); }
+.sp-week small { color: var(--text-3); font-size: 12px; }
+
+/* Header button */
+.ch-search svg { width: 19px; height: 19px; }
+.ch-search.on, .ch-info.on { color: var(--accent); }
+
+/* Found-message highlight (stronger than the reply flash) */
+.msg.flash .msg-content, .sys-msg.flash { animation: sp-flash 1.8s ease-out; border-radius: 20px; }
+@keyframes sp-flash {
+  0%, 30% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  100% { box-shadow: 0 0 0 4px transparent; background: transparent; }
+}
+
+/* Viewing older messages */
+.jump.history-jump { background: var(--accent); color: #fff; border-color: transparent; }

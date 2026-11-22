@@ -7,7 +7,7 @@ import { useRef, type ReactNode } from 'react'
 import { closeModal, get, openModal } from '@/store'
 import { Ic } from './ui'
 
-export const APP_VERSION = '2.1.0'
+export const APP_VERSION = '2.2.0'
 
 interface Note {
   icon: string
@@ -38,6 +38,17 @@ const NOTES: Note[] = [
       </>
     ),
     hue: 320,
+  },
+  {
+    icon: '🔎',
+    title: 'Search & time travel',
+    text: (
+      <>
+        Tap <b>🔍</b> in any chat (or Ctrl+F) to find any message, or jump to the <b>first messages ever</b>, a date, or any week.
+      </>
+    ),
+    wide: true,
+    hue: 200,
   },
   {
     icon: '🩷',
