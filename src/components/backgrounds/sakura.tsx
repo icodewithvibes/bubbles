@@ -2,28 +2,39 @@ import { useEffect, useRef } from 'react'
 
 import { SakuraShader } from './sakura-shader'
 
-// Original ASCII art: a blossom branch and a torii gate with 桜 (sakura).
-const BRANCH = String.raw`
- \__      ,*.
-    \__  ( @ )   ,*.
-       \__\*'---( @ )
-          \       '*'    ,*.
-           '-._____.----( @ )
-              \   ,*.    '*'
-               \_( @ )
-                  '*'`
+const asset = (f: string) => `${import.meta.env.BASE_URL}ascii/${f}`
 
-const TORII = String.raw`
-   ._______________________________.
-   \_____________________________/
-       ||  [__]         [__]  ||
-   ____||_____________________||____
-   \___||_________ 桜 _________||___/
-       ||                     ||
-       ||                     ||
-       ||                     ||
-  ~~~~~||~~~~~~~~~~~~~~~~~~~~~||~~~~~
- ~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~ ~~`
+/**
+ * ASCII art from the 21st.dev ASCII community (baked to looping video):
+ * "ascii flower" by @daschinmoyy21 and "mtfuji" by @kushal.ict2022.
+ */
+function AsciiVideo({ name, className }: { name: string; className: string }) {
+  const reduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  return (
+    <video
+      className={className}
+      src={asset(`${name}.mp4`)}
+      poster={asset(`${name}.webp`)}
+      autoPlay={!reduce}
+      loop
+      muted
+      playsInline
+      aria-hidden
+    />
+  )
+}
+
+/** The dreamy background: shader + dusk veil + ASCII art. Sits behind the app. */
+export function SakuraScene() {
+  return (
+    <div className="absolute inset-0 overflow-hidden" aria-hidden>
+      <SakuraShader className="absolute inset-0" />
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(160deg, rgba(26,16,34,0.7), rgba(48,20,40,0.5) 55%, rgba(20,12,28,0.78))' }} />
+      <AsciiVideo name="mtfuji" className="sakura-fuji" />
+      <AsciiVideo name="sakura-branch" className="sakura-branch-video" />
+    </div>
+  )
+}
 
 interface Petal {
   x: number
@@ -33,55 +44,74 @@ interface Petal {
   vy: number
   rot: number
   vr: number
+  flip: number
+  vf: number
   sway: number
   phase: number
   hue: number
+  light: number
 }
 
-/** Soft five-ish petal shapes drifting down with a little wind. */
-function Petals() {
+/**
+ * Falling petals, drawn in a layer ABOVE the app (clicks pass through), so
+ * they drift over the chat instead of hiding behind the frosted panels.
+ */
+export function SakuraPetals() {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const canvas = ref.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
     let w = 0
     let h = 0
     let petals: Petal[] = []
     const make = (top = false): Petal => ({
-      x: Math.random() * w,
-      y: top ? -20 - Math.random() * h * 0.3 : Math.random() * h,
-      r: 4 + Math.random() * 6,
-      vx: 0.2 + Math.random() * 0.5,
-      vy: 0.5 + Math.random() * 0.9,
+      x: Math.random() * w * 1.1 - w * 0.1,
+      y: top ? -30 - Math.random() * 120 : Math.random() * h,
+      r: 7 + Math.random() * 7,
+      vx: 0.35 + Math.random() * 0.6,
+      vy: 0.6 + Math.random() * 0.9,
       rot: Math.random() * Math.PI * 2,
-      vr: (Math.random() - 0.5) * 0.04,
-      sway: 0.6 + Math.random() * 1.2,
+      vr: (Math.random() - 0.5) * 0.035,
+      flip: Math.random() * Math.PI * 2,
+      vf: 0.02 + Math.random() * 0.04,
+      sway: 0.5 + Math.random(),
       phase: Math.random() * Math.PI * 2,
-      hue: 340 + Math.random() * 20,
+      hue: 338 + Math.random() * 18,
+      light: 80 + Math.random() * 10,
     })
     const resize = () => {
       const dpr = Math.min(devicePixelRatio || 1, 2)
-      w = canvas.clientWidth
-      h = canvas.clientHeight
+      w = innerWidth
+      h = innerHeight
       canvas.width = w * dpr
       canvas.height = h * dpr
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      const count = Math.round(Math.min(70, (w * h) / 22000))
+      const count = Math.round(Math.max(18, Math.min(48, (w * h) / 32000)))
       petals = Array.from({ length: count }, () => make())
     }
     const draw = (p: Petal) => {
       ctx.save()
       ctx.translate(p.x, p.y)
       ctx.rotate(p.rot)
-      ctx.scale(1, 0.6 + 0.4 * Math.abs(Math.sin(p.rot * 2)))
+      // A tumbling petal: squash one axis as it "flips" in the air.
+      ctx.scale(Math.cos(p.flip) * 0.75 + 0.25 * Math.sign(Math.cos(p.flip) || 1), 1)
+      const r = p.r
+      const g = ctx.createLinearGradient(0, -r, 0, r)
+      g.addColorStop(0, `hsla(${p.hue}, 95%, ${p.light + 6}%, 0.95)`)
+      g.addColorStop(1, `hsla(${p.hue}, 80%, ${p.light - 14}%, 0.95)`)
       ctx.beginPath()
-      ctx.moveTo(0, -p.r)
-      ctx.bezierCurveTo(p.r, -p.r, p.r * 0.9, p.r * 0.6, 0, p.r)
-      ctx.bezierCurveTo(-p.r * 0.9, p.r * 0.6, -p.r, -p.r, 0, -p.r)
-      ctx.fillStyle = `hsla(${p.hue}, 85%, 82%, 0.85)`
+      // Cherry petal: rounded with a little notch at the tip.
+      ctx.moveTo(0, r)
+      ctx.bezierCurveTo(r * 1.1, r * 0.4, r * 0.8, -r * 0.9, r * 0.18, -r)
+      ctx.lineTo(0, -r * 0.72)
+      ctx.lineTo(-r * 0.18, -r)
+      ctx.bezierCurveTo(-r * 0.8, -r * 0.9, -r * 1.1, r * 0.4, 0, r)
+      ctx.fillStyle = g
+      ctx.shadowColor = 'rgba(255, 120, 170, 0.55)'
+      ctx.shadowBlur = 6
       ctx.fill()
       ctx.restore()
     }
@@ -91,18 +121,18 @@ function Petals() {
       t += 0.016
       ctx.clearRect(0, 0, w, h)
       for (const p of petals) {
-        p.x += p.vx + Math.sin(t * p.sway + p.phase) * 0.6
+        p.x += p.vx + Math.sin(t * p.sway + p.phase) * 0.7
         p.y += p.vy
         p.rot += p.vr
-        if (p.y > h + 20 || p.x > w + 20) Object.assign(p, make(true), { x: Math.random() * w * 0.9 - w * 0.1 })
+        p.flip += p.vf
+        if (p.y > h + 30 || p.x > w + 30) Object.assign(p, make(true))
         draw(p)
       }
       raf = document.visibilityState === 'visible' ? requestAnimationFrame(tick) : 0
     }
-    const onVis = () => !reduce && !raf && document.visibilityState === 'visible' && (raf = requestAnimationFrame(tick))
+    const onVis = () => !raf && document.visibilityState === 'visible' && (raf = requestAnimationFrame(tick))
     resize()
-    if (reduce) petals.forEach(draw)
-    else raf = requestAnimationFrame(tick)
+    raf = requestAnimationFrame(tick)
     window.addEventListener('resize', resize)
     document.addEventListener('visibilitychange', onVis)
     return () => {
@@ -111,18 +141,5 @@ function Petals() {
       document.removeEventListener('visibilitychange', onVis)
     }
   }, [])
-  return <canvas ref={ref} className="absolute inset-0 h-full w-full" aria-hidden />
-}
-
-export function SakuraScene() {
-  return (
-    <div className="absolute inset-0 overflow-hidden" aria-hidden>
-      <SakuraShader className="absolute inset-0" />
-      {/* Dusk veil: keeps the light text readable and makes the petals glow. */}
-      <div className="absolute inset-0" style={{ background: 'linear-gradient(160deg, rgba(26,16,34,0.72), rgba(48,20,40,0.55) 55%, rgba(20,12,28,0.78))' }} />
-      <pre className="sakura-ascii sakura-branch">{BRANCH}</pre>
-      <pre className="sakura-ascii sakura-torii">{TORII}</pre>
-      <Petals />
-    </div>
-  )
+  return <canvas ref={ref} className="h-full w-full" aria-hidden />
 }

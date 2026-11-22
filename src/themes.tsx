@@ -13,15 +13,19 @@ export interface AppTheme {
   preview: string
   /** Animated layer behind the app; absent for flat themes. */
   Background?: ComponentType
+  /** Decorative layer above the app (clicks pass through), e.g. falling petals. */
+  Overlay?: ComponentType
 }
 
+// Crisp rain: small glow and a shorter trail so characters stay sharp instead of smearing.
 const MatrixBg = lazy(() =>
   import('./components/backgrounds/matrix-rain').then((m) => ({
-    default: () => <m.MatrixRain className="absolute inset-0" background="#010a04" fontSize={18} density={0.85} speed={0.8} glow={6} />,
+    default: () => <m.MatrixRain className="absolute inset-0" background="#010a04" fontSize={17} density={0.72} speed={0.75} glow={2.5} trail={0.78} />,
   })),
 )
 const AuroraBg = lazy(() => import('./components/backgrounds/aurora').then((m) => ({ default: () => <m.AuroraBackground /> })))
 const SakuraBg = lazy(() => import('./components/backgrounds/sakura').then((m) => ({ default: m.SakuraScene })))
+const SakuraFx = lazy(() => import('./components/backgrounds/sakura').then((m) => ({ default: m.SakuraPetals })))
 
 export const THEMES: AppTheme[] = [
   { id: 'default', name: 'Classic', tagline: 'The original iMessage look', preview: 'linear-gradient(135deg,#5ac8fa,#0a64ff)' },
@@ -42,9 +46,10 @@ export const THEMES: AppTheme[] = [
   {
     id: 'sakura',
     name: 'Sakura',
-    tagline: 'Falling blossoms, a torii gate in ASCII',
+    tagline: 'Falling petals, Mt. Fuji and blossoms in ASCII',
     preview: 'radial-gradient(circle at 30% 30%,#eacdc2,transparent 55%),radial-gradient(circle at 75% 70%,#b75d69,transparent 60%),#1a1423',
     Background: SakuraBg,
+    Overlay: SakuraFx,
   },
 ]
 
@@ -91,13 +96,26 @@ export function ThemeBackground() {
   useEffect(() => {
     if (document.documentElement.dataset.appTheme !== (id === 'default' ? undefined : id)) applyTheme(id)
   }, [id])
-  const Bg = THEMES.find((t) => t.id === id)?.Background
-  if (!Bg) return null
+  const theme = THEMES.find((t) => t.id === id)
+  const Bg = theme?.Background
+  const Fx = theme?.Overlay
+  if (!Bg && !Fx) return null
   return (
-    <div className="theme-bg" aria-hidden>
-      <Suspense fallback={null}>
-        <Bg />
-      </Suspense>
-    </div>
+    <>
+      {Bg && (
+        <div className="theme-bg" aria-hidden>
+          <Suspense fallback={null}>
+            <Bg />
+          </Suspense>
+        </div>
+      )}
+      {Fx && (
+        <div className="theme-overlay" aria-hidden>
+          <Suspense fallback={null}>
+            <Fx />
+          </Suspense>
+        </div>
+      )}
+    </>
   )
 }

@@ -90,7 +90,7 @@ export function MatrixRain({
       ctx!.fillRect(0, 0, b.width, b.height)
     }
     const characterAt = (seed: number) => glyphs[Math.floor(randomFrom(seed) * glyphs.length)] ?? glyphs[0] ?? '0'
-    const font = `500 ${safeFontSize}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`
+    const font = `700 ${safeFontSize}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`
 
     function drawStatic() {
       const b = root!.getBoundingClientRect()

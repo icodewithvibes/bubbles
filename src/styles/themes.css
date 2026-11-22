@@ -48,7 +48,7 @@
   --them: rgba(0, 40, 16, 0.85); --them-text: #d4ffe0; --glass: rgba(0, 14, 6, 0.8);
   --shadow: 0 0 0 1px rgba(57, 255, 104, 0.15), 0 10px 40px rgba(0, 0, 0, 0.7);
   --online: #39ff68;
-  --panel: rgba(0, 10, 4, 0.72); --panel-main: rgba(0, 8, 3, 0.45); --panel-blur: 3px;
+  --panel: rgba(0, 10, 4, 0.82); --panel-main: rgba(0, 8, 3, 0.35); --panel-blur: 0px;
   color-scheme: dark;
 }
 :root[data-app-theme="matrix"] body { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
@@ -75,13 +75,23 @@
 :root[data-app-theme="sakura"] .main,
 :root[data-app-theme="matrix"] .main { backdrop-filter: none; -webkit-backdrop-filter: none; }
 
-.sakura-ascii {
-  position: absolute; margin: 0; font: 13px/1.15 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color: #ffc2d4; opacity: 0.55; white-space: pre; pointer-events: none; text-shadow: 0 0 12px rgba(255, 140, 180, 0.6);
+/* 21st.dev ASCII art videos. "screen" blending drops their black backgrounds. */
+.sakura-branch-video {
+  position: absolute; top: 40px; right: -40px; width: min(620px, 55vw); aspect-ratio: 16 / 9; object-fit: cover;
+  mix-blend-mode: screen; opacity: 0.85; filter: hue-rotate(250deg) saturate(1.6) brightness(1.15);
+  -webkit-mask-image: radial-gradient(ellipse 70% 70% at 55% 45%, #000 55%, transparent 100%);
+          mask-image: radial-gradient(ellipse 70% 70% at 55% 45%, #000 55%, transparent 100%);
 }
-.sakura-branch { top: 76px; right: 24px; }
-.sakura-torii { bottom: 80px; right: 28px; font-size: 14px; }
-@media (max-width: 700px) { .sakura-ascii { display: none; } }
+/* mtfuji is bright all over, so it's drawn normally (darkened, tinted pink) instead of blended. */
+.sakura-fuji {
+  position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 55vh; object-fit: cover; object-position: center 70%;
+  opacity: 0.7; filter: hue-rotate(150deg) saturate(0.9) brightness(0.62) contrast(1.35);
+  -webkit-mask-image: linear-gradient(to top, #000 35%, transparent);
+          mask-image: linear-gradient(to top, #000 35%, transparent);
+}
+/* Petals fly over everything except dialogs and menus. */
+.theme-overlay { position: fixed; inset: 0; z-index: 150; pointer-events: none; }
+@media (max-width: 700px) { .sakura-branch-video { opacity: 0.5; } }
 
 /* ---------- Theme picker (Settings) ---------- */
 .theme-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
