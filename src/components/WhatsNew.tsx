@@ -7,7 +7,7 @@ import { useRef, type ReactNode } from 'react'
 import { closeModal, get, openModal } from '@/store'
 import { Ic } from './ui'
 
-export const APP_VERSION = '2.2.1'
+export const APP_VERSION = '2.3.0'
 
 interface Note {
   icon: string
@@ -23,7 +23,7 @@ const NOTES: Note[] = [
     title: 'Themes for the whole app',
     text: (
       <>
-        Make Bubbles yours: <b>Glass</b>, <b>Matrix</b>, <b>Sakura</b> and more. Open <b>Settings → Theme</b>.
+        11 looks: <b>Synthwave</b>, <b>Deep Sea</b>, <b>Galaxy</b>, <b>Lava Lamp</b>, <b>Midnight Rain</b>, <b>Winter</b>, <b>Retro CRT</b> and more. Chat backgrounds now take on your theme's color and effects. Open <b>Settings → Theme</b>.
       </>
     ),
     wide: true,
@@ -76,7 +76,7 @@ const NOTES: Note[] = [
     title: 'Camera & videos',
     text: (
       <>
-        Snap photos or record videos right in the chat with the <b>camera</b> button.
+        Snap photos or record videos with the <b>camera</b> button, now widescreen. Watch your clip with sound before you send it.
       </>
     ),
     hue: 40,

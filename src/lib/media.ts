@@ -192,7 +192,7 @@ export const extFor = (mime: string) =>
   ] ?? 'bin'
 
 /** Waveform bars (0–1) from an audio blob, for the voice message bubble. */
-export async function audioPeaks(blob: Blob, bars = 40): Promise<{ peaks: number[]; dur: number }> {
+export async function audioPeaks(blob: Blob, bars = 64): Promise<{ peaks: number[]; dur: number }> {
   const ctx = new AudioContext()
   try {
     const buf = await ctx.decodeAudioData(await blob.arrayBuffer())

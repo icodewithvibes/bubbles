@@ -38,9 +38,24 @@
   background: rgba(255, 255, 255, .22);
 }
 .theirs .audio-play { background: color-mix(in srgb, var(--them-text) 12%, transparent); }
-.audio-wave { flex: 1; height: 28px; display: flex; align-items: center; gap: 2px; cursor: pointer; min-width: 120px; }
-.audio-wave i { flex: 1; border-radius: 2px; background: currentColor; opacity: .38; min-height: 3px; transition: opacity .1s; }
-.audio-wave i.on { opacity: 1; }
+.audio-wave { position: relative; flex: 1; height: 30px; min-width: 140px; cursor: pointer; touch-action: none; --p: 0; }
+.audio-wave .wave-base, .audio-wave .wave-fill {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between; pointer-events: none;
+}
+.audio-wave i { width: 2px; flex: none; min-height: 2px; border-radius: 2px; background: currentColor; transform-origin: center; }
+.audio-wave .wave-base i { opacity: .3; }
+/* Bright copy revealed up to the play position: a smooth, continuous fill. */
+.audio-wave .wave-fill { clip-path: inset(0 calc((1 - var(--p)) * 100%) 0 0); }
+.mine .audio-wave .wave-fill i { background: linear-gradient(180deg, #fff, color-mix(in srgb, #fff 70%, transparent)); }
+.theirs .audio-wave .wave-fill i { background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #b388ff)); }
+.audio-wave.playing .wave-fill i { animation: wave-breathe 1s ease-in-out infinite; }
+@keyframes wave-breathe { 50% { transform: scaleY(.82); } }
+.audio-wave .wave-head {
+  position: absolute; top: 2px; bottom: 2px; width: 2px; border-radius: 2px; left: calc(var(--p) * 100%); translate: -1px 0;
+  background: currentColor; box-shadow: 0 0 6px 1px currentColor; pointer-events: none;
+}
+.theirs .audio-wave .wave-head { background: var(--accent); color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .audio-wave.playing .wave-fill i { animation: none; } }
 .audio-time { font-variant-numeric: tabular-nums; opacity: .85; min-width: 32px; }
 .audio-rate { font-size: 11.5px; font-weight: 700; padding: 2px 6px; border-radius: 8px; background: rgba(255, 255, 255, .18); }
 .theirs .audio-rate { background: color-mix(in srgb, var(--them-text) 10%, transparent); }
@@ -67,7 +82,7 @@
 .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); animation: rec-blink 1s ease-in-out infinite; }
 @keyframes rec-blink { 50% { opacity: .25; } }
 .rec-time { font-variant-numeric: tabular-nums; font-size: 14px; min-width: 38px; }
-.rec-wave { flex: 1; height: 26px; color: var(--accent); min-width: 0; }
+.rec-wave { flex: 1; height: 28px; color: var(--accent); min-width: 0; }
 .rec-send { position: static !important; display: grid !important; }
 
 /* ---------- Upload progress ---------- */
@@ -81,10 +96,33 @@
 .upload-track i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
 
 /* ---------- Camera ---------- */
-.modal.camera-modal { width: min(720px, calc(100vw - 24px)); padding: 0; overflow: hidden; background: #000; border: 1px solid var(--line); }
-.cam-stage { position: relative; aspect-ratio: 4 / 3; max-height: 70vh; background: #000; display: grid; place-items: center; }
+.modal.camera-modal { width: min(1100px, calc(100vw - 24px)); padding: 0; overflow: hidden; background: #000; border: 1px solid var(--line); }
+.cam-stage { position: relative; aspect-ratio: 16 / 9; max-height: calc(100vh - 140px); background: #000; display: grid; place-items: center; }
 .cam-view { width: 100%; height: 100%; object-fit: cover; }
 .cam-view.mirror { transform: scaleX(-1); }
+.cam-view.fit { object-fit: contain; background: #000; }
+@media (max-width: 640px) { .cam-stage { aspect-ratio: 3 / 4; } }
+
+/* Recorded clip review */
+.clip-preview { position: absolute; inset: 0; display: grid; place-items: center; }
+.clip-preview video { cursor: pointer; }
+.clip-big-play {
+  position: absolute; width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; font-size: 26px; color: #fff;
+  background: rgba(0, 0, 0, .45); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, .25); padding-left: 4px;
+  transition: transform .15s;
+}
+.clip-big-play:hover { transform: scale(1.06); }
+.clip-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 10px; padding: 26px 14px 12px; color: #fff;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .7));
+}
+.clip-btn { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 50%; font-size: 13px; color: #fff; }
+.clip-btn:hover { background: rgba(255, 255, 255, .15); }
+.clip-time { font-size: 12.5px; font-variant-numeric: tabular-nums; flex: none; min-width: 34px; text-align: center; }
+.clip-scrub { flex: 1; appearance: none; -webkit-appearance: none; height: 4px; border-radius: 2px; cursor: pointer; --p: 0;
+  background: linear-gradient(90deg, var(--accent) calc(var(--p) * 100%), rgba(255, 255, 255, .3) 0); }
+.clip-scrub::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent); }
+.clip-scrub::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; }
 .cam-err { color: #fff; padding: 24px; text-align: center; }
 .cam-close { position: absolute; top: 10px; right: 10px; background: rgba(0, 0, 0, .45); color: #fff; }
 .cam-rec { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); color: #fff; background: rgba(255, 59, 48, .85); padding: 3px 10px; border-radius: 10px; font-variant-numeric: tabular-nums; font-size: 14px; }

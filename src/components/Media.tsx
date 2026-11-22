@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type * as React from 'react'
 
 import { CHUNK_LIMITS, isChunked, loadChunked, uploadChunked } from '@/lib/chunks'
 import {
@@ -158,6 +159,78 @@ function Sending() {
   )
 }
 
+/** Calls onTick every animation frame while mounted (timeupdate only fires ~4×/s). */
+function Ticker({ onTick }: { onTick: () => void }) {
+  const cb = useRef(onTick)
+  cb.current = onTick
+  useEffect(() => {
+    let raf = 0
+    const loop = () => {
+      cb.current()
+      raf = requestAnimationFrame(loop)
+    }
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+  return null
+}
+
+/** Resample to `n` bars, then soften with a neighbor blur so the shape reads like speech. */
+function shapePeaks(src: number[], n: number) {
+  const out = Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * src.length
+    const b = ((i + 1) / n) * src.length
+    let m = 0
+    for (let j = Math.floor(a); j < Math.max(Math.floor(a) + 1, Math.ceil(b)); j++) m = Math.max(m, src[Math.min(j, src.length - 1)] ?? 0)
+    return m
+  })
+  return out.map((v, i) => {
+    const l = out[i - 1] ?? v
+    const r = out[i + 1] ?? v
+    // sqrt lifts quiet syllables so the wave isn't mostly flat.
+    return Math.max(0.08, Math.sqrt(v * 0.6 + l * 0.2 + r * 0.2))
+  })
+}
+
+/**
+ * Fine, mirrored waveform: thin rounded bars, a dim base layer and a bright
+ * copy clipped to the play position, plus a glowing playhead. Drag or tap to seek.
+ */
+function Waveform({ peaks, progress, playing, onSeek }: { peaks: number[]; progress: number; playing: boolean; onSeek: (f: number) => void }) {
+  const bars = shapePeaks(peaks, 54)
+  const seek = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    onSeek(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)))
+  }
+  const row = (cls: string) => (
+    <div className={cls} aria-hidden>
+      {bars.map((p, i) => (
+        <i key={i} style={{ height: `${p * 100}%`, animationDelay: `${(i % 9) * -0.11}s` }} />
+      ))}
+    </div>
+  )
+  return (
+    <div
+      className={`audio-wave ${playing ? 'playing' : ''}`}
+      style={{ '--p': progress } as React.CSSProperties}
+      role="slider"
+      aria-label="Seek"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(progress * 100)}
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId)
+        seek(e)
+      }}
+      onPointerMove={(e) => e.buttons === 1 && seek(e)}
+    >
+      {row('wave-base')}
+      {row('wave-fill')}
+      {progress > 0 && <span className="wave-head" />}
+    </div>
+  )
+}
+
 function AudioBubble({ m, fxClass }: { m: Message; fxClass: string }) {
   const media = m.media!
   const audio = useRef<HTMLAudioElement>(null)
@@ -191,19 +264,17 @@ function AudioBubble({ m, fxClass }: { m: Message; fxClass: string }) {
         >
           {src.failed ? '!' : src.pending || src.loading ? <span className="mk-spinner audio-spin" /> : playing ? '❚❚' : '▶'}
         </button>
-        <div
-          className="audio-wave"
-          onClick={(e) => {
+        <Waveform
+          peaks={peaks}
+          progress={dur ? Math.min(1, t / dur) : 0}
+          playing={playing}
+          onSeek={(f) => {
             const a = audio.current
             if (!a || !dur) return
-            const r = e.currentTarget.getBoundingClientRect()
-            a.currentTime = ((e.clientX - r.left) / r.width) * dur
+            a.currentTime = f * dur
+            setT(f * dur)
           }}
-        >
-          {peaks.map((p, i) => (
-            <i key={i} className={dur && i / peaks.length < t / dur ? 'on' : ''} style={{ height: `${Math.max(12, p * 100)}%` }} />
-          ))}
-        </div>
+        />
         <small className="audio-time">{fmtDur(playing || t ? t : dur)}</small>
         <button
           className="audio-rate"
@@ -226,8 +297,9 @@ function AudioBubble({ m, fxClass }: { m: Message; fxClass: string }) {
           setPlaying(false)
           setT(0)
         }}
-        onTimeUpdate={(e) => setT(e.currentTarget.currentTime)}
+        onTimeUpdate={(e) => !playing && setT(e.currentTarget.currentTime)}
       />
+      {playing && <Ticker onTick={() => audio.current && setT(audio.current.currentTime)} />}
       {transcript ? (
         <p className="audio-transcript">{transcript}</p>
       ) : (
@@ -361,37 +433,83 @@ export function MicButton({ c }: { c: Chat }) {
     r.start(250)
     recorder.current = r
 
-    // Live waveform
+    // Live waveform: thin capsules that scroll smoothly left, fading out with
+    // age, with a gradient in the theme accent and a glowing "live" tip.
     const ctx = new AudioContext()
     const an = ctx.createAnalyser()
-    an.fftSize = 256
+    an.fftSize = 1024
+    an.smoothingTimeConstant = 0.6
     ctx.createMediaStreamSource(stream).connect(an)
-    const data = new Uint8Array(an.frequencyBinCount)
-    const history: number[] = []
+    const data = new Float32Array(an.fftSize)
+    const STEP = 4 // px per bar (CSS px): 2px capsule + 2px gap
+    const EVERY = 55 // ms per new bar
+    const levels: number[] = []
+    let level = 0
+    let lastPush = performance.now()
     let raf = 0
-    const draw = () => {
-      an.getByteTimeDomainData(data)
-      let peak = 0
-      for (const v of data) peak = Math.max(peak, Math.abs(v - 128) / 128)
-      history.push(peak)
-      if (history.length > 60) history.shift()
+    let lastTick = 0
+    const draw = (now: number) => {
+      an.getFloatTimeDomainData(data)
+      let sum = 0
+      for (const v of data) sum += v * v
+      // RMS → perceptual curve; fast attack, slower release, like a VU meter.
+      const target = Math.min(1, Math.pow(Math.sqrt(sum / data.length) * 4.2, 0.7))
+      level += (target - level) * (target > level ? 0.55 : 0.18)
+      while (now - lastPush >= EVERY) {
+        levels.push(level)
+        lastPush += EVERY
+        if (levels.length > 400) levels.shift()
+      }
       const cv = canvas.current
       if (cv) {
+        const dpr = Math.min(devicePixelRatio || 1, 2)
+        const cw = cv.clientWidth
+        const ch = cv.clientHeight
+        if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) {
+          cv.width = Math.round(cw * dpr)
+          cv.height = Math.round(ch * dpr)
+        }
         const g = cv.getContext('2d')!
-        const w = (cv.width = cv.clientWidth * 2)
-        const h = (cv.height = cv.clientHeight * 2)
-        g.clearRect(0, 0, w, h)
-        g.fillStyle = getComputedStyle(cv).color
-        const bw = w / 60
-        history.forEach((p, i) => {
-          const bh = Math.max(4, Math.min(1, p * 2.2) * h)
-          g.fillRect(i * bw + bw * 0.2, (h - bh) / 2, bw * 0.6, bh)
-        })
+        g.setTransform(dpr, 0, 0, dpr, 0, 0)
+        g.clearRect(0, 0, cw, ch)
+        const color = getComputedStyle(cv).color
+        const grad = g.createLinearGradient(0, 0, cw, 0)
+        grad.addColorStop(0, 'transparent')
+        grad.addColorStop(0.35, color)
+        grad.addColorStop(1, color)
+        g.strokeStyle = grad
+        g.lineCap = 'round'
+        g.lineWidth = 2
+        const mid = ch / 2
+        const tipX = cw - 8
+        // Sub-bar scroll offset so motion is continuous, not steppy.
+        const shift = ((now - lastPush) / EVERY) * STEP
+        g.beginPath()
+        for (let i = levels.length - 1, k = 0; i >= 0; i--, k++) {
+          const x = tipX - k * STEP - shift
+          if (x < -2) break
+          const amp = Math.max(1, levels[i] * (mid - 2))
+          g.moveTo(x, mid - amp)
+          g.lineTo(x, mid + amp)
+        }
+        g.stroke()
+        // Live tip: a soft glowing dot that swells with your voice.
+        const r = 2.5 + level * 3
+        g.shadowColor = color
+        g.shadowBlur = 8 + level * 10
+        g.fillStyle = color
+        g.beginPath()
+        g.arc(tipX + 4, mid, r, 0, Math.PI * 2)
+        g.fill()
+        g.shadowBlur = 0
       }
-      setNow(Date.now())
+      if (now - lastTick > 250) {
+        lastTick = now
+        setNow(Date.now())
+      }
       raf = requestAnimationFrame(draw)
     }
-    draw()
+    raf = requestAnimationFrame(draw)
     stopAll.current = () => {
       cancelAnimationFrame(raf)
       void ctx.close()
@@ -439,13 +557,114 @@ export function MicButton({ c }: { c: Chat }) {
 const pickVideoMime = () =>
   ['video/mp4;codecs=avc1,mp4a', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find((t) => MediaRecorder.isTypeSupported(t)) ?? ''
 
+/** Review a recorded clip with sound before sending: play/pause, scrub, mute, replay. */
+function ClipPreview({ url, fallbackDur }: { url: string; fallbackDur: number }) {
+  const v = useRef<HTMLVideoElement>(null)
+  const [playing, setPlaying] = useState(false)
+  const [t, setT] = useState(0)
+  const [dur, setDur] = useState(fallbackDur)
+  const [muted, setMuted] = useState(false)
+  const [ended, setEnded] = useState(false)
+
+  const play = () => {
+    const el = v.current
+    if (!el) return
+    if (ended || el.currentTime >= (dur || el.duration) - 0.05) el.currentTime = 0
+    setEnded(false)
+    el.play().catch(() => {
+      // Autoplay with sound refused: start muted and let them unmute.
+      el.muted = true
+      setMuted(true)
+      void el.play().catch(() => {})
+    })
+  }
+
+  return (
+    <div className="clip-preview">
+      <video
+        ref={v}
+        src={url}
+        playsInline
+        preload="auto"
+        className="cam-view fit"
+        onClick={() => (playing ? v.current?.pause() : play())}
+        onLoadedMetadata={(e) => {
+          const el = e.currentTarget
+          // MediaRecorder webm reports duration = Infinity until it has been
+          // seeked to the end once; seek far, read the real length, rewind.
+          if (Number.isFinite(el.duration) && el.duration > 0) {
+            setDur(el.duration)
+            play()
+          } else {
+            const fix = () => {
+              el.removeEventListener('durationchange', fix)
+              if (Number.isFinite(el.duration) && el.duration > 0) setDur(el.duration)
+              el.currentTime = 0
+              play()
+            }
+            el.addEventListener('durationchange', fix)
+            el.currentTime = 1e9
+          }
+        }}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => {
+          setPlaying(false)
+          setEnded(true)
+        }}
+        onTimeUpdate={(e) => !playing && setT(e.currentTarget.currentTime)}
+      />
+      {playing && <Ticker onTick={() => v.current && setT(v.current.currentTime)} />}
+      {!playing && (
+        <button className="clip-big-play" onClick={play} aria-label={ended ? 'Replay' : 'Play'}>
+          {ended ? '↻' : '▶'}
+        </button>
+      )}
+      <div className="clip-bar">
+        <button className="clip-btn" onClick={() => (playing ? v.current?.pause() : play())} aria-label={playing ? 'Pause' : 'Play'}>
+          {playing ? '❚❚' : '▶'}
+        </button>
+        <span className="clip-time">{fmtDur(Math.min(t, dur || t))}</span>
+        <input
+          className="clip-scrub"
+          type="range"
+          min={0}
+          max={dur || 1}
+          step={0.01}
+          value={Math.min(t, dur || 1)}
+          style={{ '--p': dur ? Math.min(1, t / dur) : 0 } as React.CSSProperties}
+          onChange={(e) => {
+            const nt = Number(e.target.value)
+            if (v.current) v.current.currentTime = nt
+            setT(nt)
+            setEnded(false)
+          }}
+          aria-label="Seek"
+        />
+        <span className="clip-time">{fmtDur(dur)}</span>
+        <button
+          className="clip-btn"
+          onClick={() => {
+            if (!v.current) return
+            v.current.muted = !muted
+            setMuted(!muted)
+          }}
+          aria-label={muted ? 'Unmute' : 'Mute'}
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function CameraModal({ c }: { c: Chat }) {
   const video = useRef<HTMLVideoElement>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [facing, setFacing] = useState<'user' | 'environment'>('user')
   const [cams, setCams] = useState(0)
   const [mode, setMode] = useState<'photo' | 'video'>('photo')
-  const [shot, setShot] = useState<{ file: File; url: string } | null>(null)
+  const [shot, setShot] = useState<{ file: File; url: string; dur?: number } | null>(null)
   const [recStart, setRecStart] = useState<number | null>(null)
   const [now, setNow] = useState(Date.now())
   const [err, setErr] = useState('')
@@ -455,7 +674,7 @@ function CameraModal({ c }: { c: Chat }) {
     let s: MediaStream | null = null
     let alive = true
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: true })
+      .getUserMedia({ video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 }, aspectRatio: { ideal: 16 / 9 } }, audio: true })
       .then(async (st) => {
         if (!alive) return st.getTracks().forEach((t) => t.stop())
         s = st
@@ -521,17 +740,18 @@ function CameraModal({ c }: { c: Chat }) {
     const r = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 2_500_000 } : undefined)
     const parts: Blob[] = []
     r.ondataavailable = (e) => e.data.size && parts.push(e.data)
+    const began = Date.now()
     r.onstop = () => {
       recorder.current = null
       setRecStart(null)
       const type = (r.mimeType || 'video/webm').split(';')[0]
       const blob = new Blob(parts, { type })
       const file = new File([blob], `video-${Date.now()}.${extFor(type)}`, { type })
-      setShot({ file, url: URL.createObjectURL(blob) })
+      setShot({ file, url: URL.createObjectURL(blob), dur: (Date.now() - began) / 1000 })
     }
     r.start(500)
     recorder.current = r
-    setRecStart(Date.now())
+    setRecStart(began)
   }
 
   return (
@@ -541,12 +761,14 @@ function CameraModal({ c }: { c: Chat }) {
           <p className="cam-err">{err}</p>
         ) : shot ? (
           shot.file.type.startsWith('video/') ? (
-            <video src={shot.url} controls autoPlay playsInline className="cam-view" />
+            <ClipPreview key={shot.url} url={shot.url} fallbackDur={shot.dur ?? 0} />
           ) : (
-            <img src={shot.url} alt="Your photo" className="cam-view" />
+            <img key={shot.url} src={shot.url} alt="Your photo" className="cam-view fit" />
           )
         ) : (
-          <video ref={video} autoPlay playsInline muted className={`cam-view ${mirrored ? 'mirror' : ''}`} />
+          // Keyed so React never reuses this element for the preview: a leftover
+          // srcObject (the live camera) would override the recording's src.
+          <video key="live" ref={video} autoPlay playsInline muted className={`cam-view ${mirrored ? 'mirror' : ''}`} />
         )}
         <button className="icon-btn cam-close" onClick={closeModal} aria-label="Close camera">
           <Ic name="x" />

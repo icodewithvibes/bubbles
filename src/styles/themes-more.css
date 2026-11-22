@@ -1,0 +1,197 @@
+/* ==========================================================================
+   More themes: Synthwave, Deep Sea, Galaxy, Lava Lamp, Midnight Rain,
+   Winter, Retro CRT. Same token set as themes.css; all dark-mode looks.
+   ========================================================================== */
+
+/* ---------- Synthwave ---------- */
+:root[data-app-theme="synthwave"] {
+  --accent: #ff2bd6;
+  --bg: #0b0221; --bg-2: rgba(25, 5, 45, 0.62); --bg-3: rgba(255, 43, 214, 0.1);
+  --rail: rgba(11, 2, 33, 0.7); --card: rgba(26, 6, 48, 0.94);
+  --line: rgba(255, 43, 214, 0.18); --line-2: rgba(255, 110, 199, 0.32);
+  --text: #fff0fb; --text-2: #f5b8e8; --text-3: #c98ad0; --hover: rgba(255, 43, 214, 0.1);
+  --them: rgba(40, 12, 78, 0.92); --them-text: #fff0fb; --glass: rgba(20, 4, 40, 0.72);
+  --shadow: 0 0 0 1px rgba(255, 43, 214, 0.2), 0 12px 40px rgba(0, 0, 0, 0.6);
+  --panel: rgba(14, 3, 30, 0.72); --panel-main: rgba(11, 2, 33, 0.25); --panel-blur: 10px;
+  color-scheme: dark;
+}
+:root[data-app-theme="synthwave"] .mine .bubble { background: linear-gradient(135deg, #ff2bd6, #7b2ff7); box-shadow: 0 0 14px rgba(255, 43, 214, 0.35); }
+:root[data-app-theme="synthwave"] h1, :root[data-app-theme="synthwave"] .ch-name { text-shadow: 0 0 10px rgba(255, 43, 214, 0.6); }
+
+/* ---------- Deep Sea ---------- */
+:root[data-app-theme="deepsea"] {
+  --accent: #1fb6ff;
+  --bg: #031c2e; --bg-2: rgba(3, 40, 64, 0.55); --bg-3: rgba(120, 220, 255, 0.1);
+  --rail: rgba(2, 22, 38, 0.6); --card: rgba(4, 38, 60, 0.94);
+  --line: rgba(140, 220, 255, 0.16); --line-2: rgba(140, 220, 255, 0.28);
+  --text: #e9fbff; --text-2: #a9dcee; --text-3: #7fb2c6; --hover: rgba(140, 220, 255, 0.08);
+  --them: rgba(8, 60, 92, 0.9); --them-text: #e9fbff; --glass: rgba(3, 30, 50, 0.65);
+  --shadow: 0 12px 40px rgba(0, 10, 20, 0.6);
+  --panel: rgba(2, 26, 44, 0.55); --panel-main: rgba(2, 22, 38, 0.15); --panel-blur: 14px;
+  color-scheme: dark;
+}
+:root[data-app-theme="deepsea"] .mine .bubble { background: linear-gradient(135deg, #1fb6ff, #0077b6); }
+:root[data-app-theme="deepsea"] .main, :root[data-app-theme="lava"] .main, :root[data-app-theme="synthwave"] .main, :root[data-app-theme="crt"] .main { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.deepsea-rays {
+  position: absolute; inset: -20% -10% 0; opacity: 0.5; mix-blend-mode: screen;
+  background: repeating-linear-gradient(100deg, transparent 0 6%, rgba(160, 230, 255, 0.10) 7% 9%, transparent 10% 16%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 70%); mask-image: linear-gradient(180deg, #000 0%, transparent 70%);
+  animation: rays-sway 14s ease-in-out infinite alternate; transform-origin: top center;
+}
+@keyframes rays-sway { to { transform: skewX(-6deg) translateX(3%); } }
+
+/* ---------- Galaxy ---------- */
+:root[data-app-theme="galaxy"] {
+  --accent: #8b7bff;
+  --bg: #05040f; --bg-2: rgba(16, 12, 40, 0.55); --bg-3: rgba(180, 170, 255, 0.08);
+  --rail: rgba(6, 5, 18, 0.6); --card: rgba(18, 14, 44, 0.95);
+  --line: rgba(190, 180, 255, 0.14); --line-2: rgba(190, 180, 255, 0.26);
+  --text: #f1efff; --text-2: #bdb6ea; --text-3: #8e88c0; --hover: rgba(190, 180, 255, 0.08);
+  --them: rgba(30, 24, 70, 0.9); --them-text: #f1efff; --glass: rgba(10, 8, 28, 0.7);
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  --panel: rgba(8, 6, 22, 0.55); --panel-main: rgba(5, 4, 15, 0.12); --panel-blur: 8px;
+  color-scheme: dark;
+}
+:root[data-app-theme="galaxy"] .mine .bubble { background: linear-gradient(135deg, #8b7bff, #4f46e5); }
+:root[data-app-theme="galaxy"] .main { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.galaxy-nebula {
+  position: absolute; inset: -20%; opacity: 0.55; filter: blur(40px);
+  background: radial-gradient(40% 30% at 30% 40%, #5b2a86, transparent), radial-gradient(35% 30% at 70% 65%, #123e7a, transparent),
+    radial-gradient(25% 20% at 55% 30%, #8a2a5a, transparent);
+  animation: nebula-drift 60s ease-in-out infinite alternate;
+}
+@keyframes nebula-drift { to { transform: rotate(8deg) scale(1.08) translate(2%, -2%); } }
+
+/* ---------- Lava Lamp ---------- */
+:root[data-app-theme="lava"] {
+  --accent: #ff5e3a;
+  --bg: #1a0716; --bg-2: rgba(40, 10, 34, 0.6); --bg-3: rgba(255, 120, 80, 0.1);
+  --rail: rgba(24, 6, 20, 0.6); --card: rgba(42, 12, 36, 0.95);
+  --line: rgba(255, 150, 120, 0.16); --line-2: rgba(255, 150, 120, 0.28);
+  --text: #fff1ea; --text-2: #f2bfb0; --text-3: #c98f82; --hover: rgba(255, 150, 120, 0.08);
+  --them: rgba(70, 20, 52, 0.9); --them-text: #fff1ea; --glass: rgba(30, 8, 26, 0.7);
+  --shadow: 0 12px 40px rgba(20, 0, 10, 0.6);
+  --panel: rgba(26, 6, 22, 0.5); --panel-main: rgba(26, 7, 22, 0.15); --panel-blur: 18px;
+  color-scheme: dark;
+}
+:root[data-app-theme="lava"] .mine .bubble { background: linear-gradient(135deg, #ff7a18, #ff2d75); }
+.lava-bg { background: radial-gradient(ellipse at 50% 120%, #3a0c2e, #150016 70%); }
+.lava-goo { position: absolute; inset: 0; filter: url(#bubbles-goo); opacity: 0.7; }
+.lava-blob {
+  position: absolute; bottom: -20vmin; border-radius: 50%; animation: lava-rise linear infinite;
+}
+/* Glowing centers so the blobs read as warm wax, not flat cutouts. */
+.lava-blob.h0 { background: radial-gradient(circle at 40% 35%, #ffb36b, #ff6a1a 55%, #d4400a); }
+.lava-blob.h1 { background: radial-gradient(circle at 40% 35%, #ff8ab5, #ff2d75 55%, #c0104f); }
+.lava-blob.h2 { background: radial-gradient(circle at 40% 35%, #ffd27a, #ff9a1a 55%, #d96a00); }
+.lava-pool { position: absolute; left: -10%; right: -10%; height: 16vmin; border-radius: 50%; }
+.lava-pool.top { top: -10vmin; background: linear-gradient(180deg, #c0104f, #ff2d75); }
+.lava-pool.bottom { bottom: -10vmin; background: linear-gradient(0deg, #d4400a, #ff7a18); }
+@keyframes lava-rise {
+  0% { transform: translateY(0) scale(1, 1); }
+  25% { transform: translateY(-35vh) scale(1.1, 0.9); }
+  50% { transform: translateY(-75vh) scale(0.9, 1.15); }
+  75% { transform: translateY(-110vh) scale(1.05, 0.95); }
+  100% { transform: translateY(-140vh) scale(1, 1); }
+}
+
+/* ---------- Midnight Rain ---------- */
+:root[data-app-theme="rain"] {
+  --accent: #6ea8ff;
+  --bg: #0a0f24; --bg-2: rgba(14, 20, 48, 0.55); --bg-3: rgba(160, 190, 255, 0.08);
+  --rail: rgba(8, 12, 30, 0.6); --card: rgba(16, 22, 52, 0.95);
+  --line: rgba(170, 190, 255, 0.14); --line-2: rgba(170, 190, 255, 0.26);
+  --text: #eef2ff; --text-2: #b4c0e6; --text-3: #8592bd; --hover: rgba(170, 190, 255, 0.08);
+  --them: rgba(26, 34, 76, 0.9); --them-text: #eef2ff; --glass: rgba(10, 14, 34, 0.7);
+  --shadow: 0 12px 40px rgba(0, 0, 10, 0.6);
+  --panel: rgba(10, 14, 34, 0.5); --panel-main: rgba(10, 15, 36, 0.12); --panel-blur: 16px;
+  color-scheme: dark;
+}
+:root[data-app-theme="rain"] .mine .bubble { background: linear-gradient(135deg, #6ea8ff, #6b5bff); }
+:root[data-app-theme="rain"] .main { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.rain-bokeh {
+  position: absolute; border-radius: 50%; filter: blur(14px); opacity: 0.35; mix-blend-mode: screen;
+  animation: bokeh-pulse ease-in-out infinite alternate;
+}
+@keyframes bokeh-pulse { to { opacity: 0.6; transform: scale(1.15); } }
+
+/* ---------- Winter ---------- */
+:root[data-app-theme="winter"] {
+  --accent: #4fd1c5;
+  --bg: #050b1f; --bg-2: rgba(10, 22, 50, 0.55); --bg-3: rgba(170, 230, 255, 0.08);
+  --rail: rgba(5, 11, 31, 0.6); --card: rgba(12, 26, 58, 0.95);
+  --line: rgba(190, 230, 255, 0.14); --line-2: rgba(190, 230, 255, 0.26);
+  --text: #f2fbff; --text-2: #b9d6e6; --text-3: #87a6b9; --hover: rgba(190, 230, 255, 0.08);
+  --them: rgba(22, 44, 86, 0.9); --them-text: #f2fbff; --glass: rgba(8, 18, 42, 0.7);
+  --shadow: 0 12px 40px rgba(0, 5, 20, 0.6);
+  --panel: rgba(8, 18, 42, 0.5); --panel-main: rgba(5, 11, 31, 0.12); --panel-blur: 14px;
+  color-scheme: dark;
+}
+:root[data-app-theme="winter"] .mine .bubble { background: linear-gradient(135deg, #2dd4bf, #6366f1); }
+:root[data-app-theme="winter"] .main { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.aurora {
+  position: absolute; left: -20%; right: -20%; height: 45vh; filter: blur(40px); opacity: 0.55; mix-blend-mode: screen;
+  border-radius: 50%; animation: aurora-wave 18s ease-in-out infinite alternate;
+}
+.aurora.a1 { top: 2%; background: linear-gradient(90deg, transparent, #2de2a6 30%, #4fd1c5 55%, transparent); }
+.aurora.a2 { top: 12%; background: linear-gradient(90deg, transparent, #7b5cff 35%, #2de2a6 70%, transparent); animation-duration: 24s; animation-delay: -6s; opacity: 0.4; }
+.aurora.a3 { top: 22%; background: linear-gradient(90deg, transparent 20%, #ff6bd6 50%, transparent 80%); animation-duration: 30s; opacity: 0.22; }
+@keyframes aurora-wave { 0% { transform: translateX(-6%) skewY(-4deg) scaleY(0.8); } 100% { transform: translateX(6%) skewY(4deg) scaleY(1.2); } }
+.winter-hills {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 26vh;
+  background: radial-gradient(60% 100% at 20% 100%, #dfe9ff 0 60%, transparent 61%), radial-gradient(70% 90% at 80% 100%, #c9d8f5 0 60%, transparent 61%);
+  opacity: 0.22;
+}
+
+/* ---------- Retro CRT ---------- */
+:root[data-app-theme="crt"] {
+  --accent: #ffb000;
+  --bg: #120a00; --bg-2: rgba(30, 18, 0, 0.75); --bg-3: rgba(255, 176, 0, 0.1);
+  --rail: rgba(14, 8, 0, 0.85); --card: rgba(26, 16, 0, 0.97);
+  --line: rgba(255, 176, 0, 0.2); --line-2: rgba(255, 176, 0, 0.34);
+  --text: #ffcc66; --text-2: #e0a640; --text-3: #b07e2a; --hover: rgba(255, 176, 0, 0.1);
+  --them: rgba(48, 30, 0, 0.92); --them-text: #ffd27a; --glass: rgba(20, 12, 0, 0.85);
+  --shadow: 0 0 0 1px rgba(255, 176, 0, 0.2), 0 12px 40px rgba(0, 0, 0, 0.7);
+  --online: #ffd000;
+  --panel: rgba(16, 9, 0, 0.82); --panel-main: rgba(18, 10, 0, 0.35); --panel-blur: 0px;
+  color-scheme: dark;
+}
+:root[data-app-theme="crt"] body { font-family: "VT323", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+:root[data-app-theme="crt"] .bubble { text-shadow: 0 0 6px rgba(255, 176, 0, 0.55); font-size: 14px; }
+:root[data-app-theme="crt"] .mine .bubble { background: #ffb000; color: #1a0f00; text-shadow: none; }
+:root[data-app-theme="crt"] .theirs .bubble { border: 1px solid rgba(255, 176, 0, 0.35); }
+:root[data-app-theme="crt"] h1, :root[data-app-theme="crt"] .ch-name { text-shadow: 0 0 8px rgba(255, 176, 0, 0.7); }
+.crt-bg { background: radial-gradient(ellipse at center, #3a2400 0%, #120a00 75%); }
+.crt-log {
+  position: absolute; left: 6vw; bottom: 8vh; margin: 0; font: 15px/1.6 "JetBrains Mono", ui-monospace, monospace; color: #ffb000;
+  opacity: 0.32; text-shadow: 0 0 8px #ffb000; white-space: pre; animation: crt-flicker 4s steps(1) infinite;
+}
+.crt-scan { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.28) 0 2px, transparent 2px 4px); pointer-events: none; }
+.crt-roll {
+  position: absolute; left: 0; right: 0; height: 18vh; background: linear-gradient(180deg, transparent, rgba(255, 176, 0, 0.06), transparent);
+  animation: crt-roll 7s linear infinite;
+}
+.crt-vignette { position: absolute; inset: 0; box-shadow: inset 0 0 18vmin rgba(0, 0, 0, 0.85); border-radius: 2vmin; }
+@keyframes crt-roll { from { top: -20vh; } to { top: 110vh; } }
+@keyframes crt-flicker { 0%, 100% { opacity: 0.32; } 47% { opacity: 0.28; } 48% { opacity: 0.36; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .lava-blob, .aurora, .deepsea-rays, .galaxy-nebula, .rain-bokeh, .crt-roll, .crt-log { animation: none !important; }
+}
+
+/* ---------- A chat's own background photo under a theme ----------
+   Photo → theme color wash → theme effects → messages. The column becomes its
+   own stacking context so these layers sit above its background but below
+   every message, header and composer. */
+.chat-col.layered-wall { isolation: isolate; background: transparent; }
+.wall-layers { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.wall-photo { position: absolute; inset: 0; background: center / cover no-repeat; opacity: 0.9; }
+/* Hue shift toward the theme color, keeping the photo's light and detail. */
+.wall-tint { position: absolute; inset: 0; background: var(--tint); mix-blend-mode: color; opacity: 0.3; }
+.wall-shade {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--tint) 22%, transparent), transparent 45%, color-mix(in srgb, var(--tint) 18%, transparent)),
+    rgba(0, 0, 0, 0.16);
+}
+.wall-fx { position: absolute; inset: 0; }

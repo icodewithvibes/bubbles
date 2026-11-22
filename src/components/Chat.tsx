@@ -36,7 +36,7 @@ import {
 } from '@/services/session'
 import { get, openModal, closeModal, set, toast, useStore } from '@/store'
 import { openAddPeople, openLightbox, openProfile } from './Dialogs'
-import { themeHasBackdrop } from '@/themes'
+import { themeHasBackdrop, WallLayers } from '@/themes'
 import { EffectPicker, effectLabel, fxSeen, isBubbleEffect, isScreenEffect, markFxSeen, playScreenEffect, type EffectId } from './Effects'
 import { CameraButton, MediaContent, MicButton, UploadBar, sendFiles } from './Media'
 import { openEmojiPicker, openGifPicker } from './Pickers'
@@ -1028,8 +1028,8 @@ export function ChatView({ id }: { id: string }) {
   return (
     <section className={`chat ${detailsOpen || searchOpen ? 'details-open' : ''}`}>
       <div
-        className={`chat-col ${wall || themed ? 'has-wall' : ''} ${wall ? 'own-wall' : ''} ${drop ? 'drop' : ''}`}
-        style={wall ? { backgroundImage: `url("${wall}")` } : undefined}
+        className={`chat-col ${wall || themed ? 'has-wall' : ''} ${wall ? 'own-wall' : ''} ${wall && themed ? 'layered-wall' : ''} ${drop ? 'drop' : ''}`}
+        style={wall && !themed ? { backgroundImage: `url("${wall}")` } : undefined}
         onDragOver={(e) => {
           e.preventDefault()
           setDrop(true)
@@ -1045,6 +1045,7 @@ export function ChatView({ id }: { id: string }) {
           if (/^https:\/\/\S+\.gif(\?\S*)?$/i.test(url)) sendGif(url)
         }}
       >
+        {wall && themed && <WallLayers wall={wall} />}
         <ChatHead c={c} />
         <Messages c={c} />
         <DndNotice c={c} />
