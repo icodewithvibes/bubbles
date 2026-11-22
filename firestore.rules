@@ -185,6 +185,21 @@ service cloud.firestore {
             && request.resource.data.reactions.diff(resource.data.get('reactions', {})).affectedKeys().hasOnly([me()]))
         );
         allow delete: if false;
+
+        // Photo/video/voice pieces while Firebase Storage isn't set up (see src/lib/chunks.ts).
+        match /chunks/{chunkId} {
+          allow read: if signedIn() && me() in chatNow().members;
+          allow create: if signedIn() && me() in chatNow().members
+            && request.resource.data.keys().hasOnly(['d', 'i', 'n', 'by'])
+            && request.resource.data.by == me()
+            && request.resource.data.d is string
+            && request.resource.data.d.size() <= 700000
+            && request.resource.data.i is int
+            && request.resource.data.n is int
+            && request.resource.data.n <= 60;
+          allow delete: if signedIn() && resource.data.by == me();
+          allow update: if false;
+        }
       }
     }
   }

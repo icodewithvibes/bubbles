@@ -32,6 +32,7 @@ import {
 } from 'firebase/firestore'
 
 import { initCalls, stopCalls } from '@/kit/call.js'
+import { deleteChunks, isChunked } from '@/lib/chunks'
 import { deleteMedia } from '@/lib/media'
 import * as N from '@/kit/notify.js'
 import { ms } from '@/kit/util.js'
@@ -521,6 +522,7 @@ export function unsend(m: Message) {
   const b = writeBatch(db)
   b.update(msgRef(c.id, m.id), { deleted: true, text: '', image: deleteField(), media: deleteField(), effect: deleteField(), transcript: deleteField() })
   void deleteMedia(m.media)
+  if (m.media && isChunked(m.media.url)) void deleteChunks(c.id, m.id)
   if (c.lastMessage?.id === m.id) b.update(chatRef(c.id), { 'lastMessage.text': 'unsent a message', 'lastMessage.system': true })
   b.commit().catch(() => toast("Couldn't unsend", 'error'))
 }

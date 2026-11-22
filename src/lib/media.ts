@@ -39,14 +39,33 @@ export class NoStorageError extends Error {
     super('Firebase Storage is not set up yet')
   }
 }
+
+// A missing bucket doesn't make uploads fail: the SDK keeps retrying for
+// ~10 minutes, so sends sat at 0%. Ask the bucket directly first (fast 404
+// when it doesn't exist; 401/403 means it exists but needs auth).
+let probe: Promise<boolean> | null = null
+function storageAvailable(): Promise<boolean> {
+  if (storageOk !== null) return Promise.resolve(storageOk)
+  probe ??= fetch(`https://firebasestorage.googleapis.com/v0/b/${storage.app.options.storageBucket}/o?maxResults=1`)
+    .then((r) => r.status !== 404)
+    .catch(() => false)
+    .then((ok) => {
+      storageOk = ok
+      return ok
+    })
+  return probe
+}
+// And never let a real upload hang that long either.
+storage.maxUploadRetryTime = 20_000
+storage.maxOperationRetryTime = 20_000
 const isNoBucket = (e: unknown) => {
   const code = (e as { code?: string })?.code ?? ''
   const msg = String((e as Error)?.message ?? '')
   return code === 'storage/unknown' || code === 'storage/bucket-not-found' || code === 'storage/project-not-found' || /404|bucket/i.test(msg)
 }
 
-export function uploadFile(path: string, blob: Blob, uploadId: string, name: string, kind: Media['kind']): Promise<string> {
-  if (storageOk === false) return Promise.reject(new NoStorageError())
+export async function uploadFile(path: string, blob: Blob, uploadId: string, name: string, kind: Media['kind']): Promise<string> {
+  if (!(await storageAvailable())) throw new NoStorageError()
   return new Promise((resolve, reject) => {
     const task = uploadBytesResumable(ref(storage, path), blob, { contentType: blob.type, cacheControl: 'public,max-age=31536000,immutable' })
     setUpload({ id: uploadId, name, kind, progress: 0 })
