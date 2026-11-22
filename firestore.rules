@@ -163,14 +163,23 @@ service cloud.firestore {
           && me() in chatAfter().members
           && request.resource.data.senderId == me()
           && request.resource.data.createdAt == request.time
-          && request.resource.data.keys().hasOnly(['senderId', 'createdAt', 'text', 'image', 'replyTo', 'system', 'urgent'])
+          && request.resource.data.keys().hasOnly(['senderId', 'createdAt', 'text', 'image', 'replyTo', 'system', 'urgent', 'effect', 'media'])
           && request.resource.data.text is string
           && request.resource.data.text.size() <= 4000
-          && (!('image' in request.resource.data) || (request.resource.data.image is string && request.resource.data.image.size() < 900000));
+          && (!('image' in request.resource.data) || (request.resource.data.image is string && request.resource.data.image.size() < 900000))
+          // v2: iMessage send effect, e.g. "slam" or "confetti".
+          && (!('effect' in request.resource.data) || (request.resource.data.effect is string && request.resource.data.effect.size() <= 20))
+          // v2: photo/video/voice in Storage (or a small inline voice clip before Storage existed).
+          && (!('media' in request.resource.data) || (
+            request.resource.data.media is map
+            && request.resource.data.media.kind in ['image', 'video', 'audio']
+            && request.resource.data.media.url is string
+            && request.resource.data.media.url.size() < 900000));
         allow update: if signedIn() && me() in chatNow().members && (
-          // Sender edits or unsends.
+          // Sender edits, unsends, or attaches the voice transcript.
           (resource.data.senderId == me()
-            && changed().hasOnly(['text', 'edited', 'editedAt', 'deleted', 'image']))
+            && changed().hasOnly(['text', 'edited', 'editedAt', 'deleted', 'image', 'media', 'effect', 'transcript'])
+            && (!('transcript' in request.resource.data) || (request.resource.data.transcript is string && request.resource.data.transcript.size() <= 4000)))
           // Anyone in the chat changes only their own reaction.
           || (changed().hasOnly(['reactions'])
             && request.resource.data.reactions.diff(resource.data.get('reactions', {})).affectedKeys().hasOnly([me()]))

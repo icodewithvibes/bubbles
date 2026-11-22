@@ -32,6 +32,7 @@ import {
 } from 'firebase/firestore'
 
 import { initCalls, stopCalls } from '@/kit/call.js'
+import { deleteMedia } from '@/lib/media'
 import * as N from '@/kit/notify.js'
 import { ms } from '@/kit/util.js'
 import { auth, db, isCacheFailure, loginToUsername, recoverCache, usernameToLogin } from '@/lib/firebase'
@@ -434,16 +435,42 @@ export async function setWallpaper(c: Chat, dataUrl: string) {
   }
 }
 
+const MEDIA_LABEL = { image: '📷 Photo', video: '🎬 Video', audio: '🎤 Voice message' } as const
+
+export function newMessageId(chatId: string) {
+  return doc(collection(db, 'chats', chatId, 'messages')).id
+}
+
 export function postMessage(
   c: Chat,
-  { text = '', image = null, replyTo = null, system = false }: { text?: string; image?: string | null; replyTo?: Message['replyTo'] | null; system?: boolean },
+  {
+    text = '',
+    image = null,
+    replyTo = null,
+    system = false,
+    effect,
+    media,
+    id,
+  }: {
+    text?: string
+    image?: string | null
+    replyTo?: Message['replyTo'] | null
+    system?: boolean
+    effect?: string
+    media?: Message['media']
+    /** Pre-allocated id (media uploads use it as their Storage folder). */
+    id?: string
+  },
 ) {
   const uid = get().uid!
-  const ref = doc(collection(db, 'chats', c.id, 'messages'))
+  const ref = id ? doc(db, 'chats', c.id, 'messages', id) : doc(collection(db, 'chats', c.id, 'messages'))
   const msg: Record<string, unknown> = { senderId: uid, createdAt: serverTimestamp(), text }
   if (image) msg.image = image
   if (replyTo) msg.replyTo = replyTo
   if (system) msg.system = true
+  if (effect) msg.effect = effect
+  if (media) msg.media = media
+  const label = media ? MEDIA_LABEL[media.kind] : image ? (isGif(image) ? 'GIF' : '📷 Photo') : ''
   if (get().urgentNext && !system) {
     msg.urgent = true
     set({ urgentNext: false })
@@ -454,7 +481,7 @@ export function postMessage(
     lastMessage: {
       id: ref.id,
       senderId: uid,
-      text: (text || '').slice(0, 200) || (image ? (isGif(image) ? 'GIF' : '📷 Photo') : ''),
+      text: (text || '').slice(0, 200) || label,
       createdAt: serverTimestamp(),
       system,
       urgent: !!msg.urgent,
@@ -492,7 +519,8 @@ export function unsend(m: Message) {
   const c = get().chats[get().msgChatId ?? '']
   if (!c) return
   const b = writeBatch(db)
-  b.update(msgRef(c.id, m.id), { deleted: true, text: '', image: deleteField() })
+  b.update(msgRef(c.id, m.id), { deleted: true, text: '', image: deleteField(), media: deleteField(), effect: deleteField(), transcript: deleteField() })
+  void deleteMedia(m.media)
   if (c.lastMessage?.id === m.id) b.update(chatRef(c.id), { 'lastMessage.text': 'unsent a message', 'lastMessage.system': true })
   b.commit().catch(() => toast("Couldn't unsend", 'error'))
 }
@@ -727,3 +755,7 @@ export async function enableNotifications() {
 }
 
 export { N }
+
+/** Sender adds the Whisper transcript after a voice message is sent. */
+export const setTranscript = (chatId: string, msgId: string, transcript: string) =>
+  updateDoc(msgRef(chatId, msgId), { transcript: transcript.slice(0, 4000) }).catch((e) => console.warn('transcript', e))

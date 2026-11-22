@@ -35,6 +35,8 @@ import {
 import { get, openModal, closeModal, set, toast, useStore } from '@/store'
 import { openAddPeople, openLightbox, openProfile } from './Dialogs'
 import { themeHasBackdrop } from '@/themes'
+import { EffectPicker, effectLabel, fxSeen, isBubbleEffect, isScreenEffect, markFxSeen, playScreenEffect, type EffectId } from './Effects'
+import { CameraButton, MediaContent, MicButton, UploadBar, sendFiles } from './Media'
 import { openEmojiPicker, openGifPicker } from './Pickers'
 import { ChatAvatar, Ic, Logo, Modal, Moon, Rich, UserAvatar, closePopover, isPopoverOpen, openMenu, openPopover } from './ui'
 
@@ -48,31 +50,6 @@ const Html = ({ html }: { html: string }) => <span style={{ display: 'contents' 
 // ============================================================================
 // Sending helpers
 // ============================================================================
-function gifDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () =>
-      (r.result as string).length <= 850_000
-        ? resolve(r.result as string)
-        : reject(new Error('That GIF is too big to send (max about 600 KB). Try the GIF button instead.'))
-    r.onerror = () => reject(new Error("Couldn't read that GIF."))
-    r.readAsDataURL(file)
-  })
-}
-
-async function sendImage(c: Chat, file: File, caption: string) {
-  try {
-    // Re-encoding through a canvas keeps only the first frame, so GIFs go up untouched.
-    const image = file.type === 'image/gif' ? await gifDataUrl(file) : await compressImage(file)
-    void postMessage(c, { image, text: caption, replyTo: get().replyTo })
-    set({ replyTo: null })
-    return true
-  } catch (e) {
-    toast((e as Error).message, 'error')
-    return false
-  }
-}
-
 export function sendGif(url: string) {
   const c = get().chats[get().msgChatId ?? '']
   if (!c) return
@@ -94,6 +71,11 @@ const composerApi = {
   setText: (_t: string) => {},
   focus: () => {},
   insert: (_t: string) => {},
+}
+
+function replayEffect(m: Message) {
+  if (isScreenEffect(m.effect)) playScreenEffect(m.effect!, m.text || effectLabel(m.effect), m.id)
+  else window.dispatchEvent(new CustomEvent('bubbles:replay', { detail: m.id }))
 }
 
 // ============================================================================
@@ -140,7 +122,8 @@ function openMsgMenu(m: Message, anchor: Element, at?: { x: number; y: number })
     [
       { id: 'react', label: 'Add Reaction', icon: <Ic name="smile" />, run: () => setTimeout(() => openTapback(m, content), 0) },
       { id: 'reply', label: 'Reply', icon: <Ic name="reply" />, run: () => startReply(m) },
-      mine && !m.image && { id: 'edit', label: 'Edit', icon: <Ic name="pencil" />, run: () => startEdit(m) },
+      mine && !m.image && !m.media && { id: 'edit', label: 'Edit', icon: <Ic name="pencil" />, run: () => startEdit(m) },
+      !!m.effect && m.effect !== 'invisible' && { id: 'replay', label: `Replay ${effectLabel(m.effect)}`, icon: <span>✨</span>, run: () => replayEffect(m) },
       !!m.text && { id: 'copy', label: 'Copy Text', icon: <Ic name="copy" />, run: () => void navigator.clipboard.writeText(m.text).then(() => toast('Copied')) },
       mine && '-',
       mine && { id: 'unsend', label: 'Unsend', icon: <Ic name="trash" />, danger: true, run: () => unsend(m) },
@@ -154,7 +137,32 @@ function openMsgMenu(m: Message, anchor: Element, at?: { x: number; y: number })
 // Rows
 // ============================================================================
 const MessageRow = memo(function MessageRow({ m, mine, start, end, group, uid }: { m: Message; mine: boolean; start: boolean; end: boolean; group: boolean; uid: string }) {
-  const jumbo = !m.image && isEmojiOnly(m.text)
+  const bubbleFx = isBubbleEffect(m.effect) ? m.effect : undefined
+  // Bubble effects play once per device, the first time the message shows up.
+  const [play, setPlay] = useState(() => !!bubbleFx && bubbleFx !== 'invisible' && !fxSeen(m.id))
+  const [revealed, setRevealed] = useState(false)
+  useEffect(() => {
+    if (!m.effect || m.pending) return
+    if (!isScreenEffect(m.effect)) {
+      const t = setTimeout(() => {
+        markFxSeen(m.id)
+        setPlay(false)
+      }, 2600)
+      return () => clearTimeout(t)
+    }
+  }, [m.effect, m.id, m.pending])
+  useEffect(() => {
+    const replay = (e: Event) => {
+      if ((e as CustomEvent).detail !== m.id) return
+      setPlay(false)
+      requestAnimationFrame(() => setPlay(true))
+      setTimeout(() => setPlay(false), 2600)
+    }
+    window.addEventListener('bubbles:replay', replay)
+    return () => window.removeEventListener('bubbles:replay', replay)
+  }, [m.id])
+  const fxClass = bubbleFx ? `fx-${bubbleFx} ${play ? 'fx-play' : ''} ${revealed ? 'revealed' : ''}` : ''
+  const jumbo = !m.image && !m.media && isEmojiOnly(m.text)
   const reactions = Object.entries(m.reactions ?? {})
   const grouped: Record<string, string[]> = {}
   reactions.forEach(([u, e]) => (grouped[e] ||= []).push(u))
@@ -216,8 +224,17 @@ const MessageRow = memo(function MessageRow({ m, mine, start, end, group, uid }:
                 </div>
               )}
             </>
+          ) : m.media ? (
+            <MediaContent m={m} fxClass={fxClass} />
           ) : (
-            <div className={`bubble ${jumbo ? 'jumbo' : ''}`}>{jumbo ? m.text : <Rich text={m.text} />}</div>
+            <div
+              className={`bubble ${jumbo ? 'jumbo' : ''} ${fxClass}`}
+              onMouseEnter={() => bubbleFx === 'invisible' && setRevealed(true)}
+              onMouseLeave={() => bubbleFx === 'invisible' && setRevealed(false)}
+              onClick={() => bubbleFx === 'invisible' && setRevealed((r) => !r)}
+            >
+              {jumbo ? m.text : <Rich text={m.text} />}
+            </div>
           )}
           {reactions.length > 0 && (
             <div className="tapbacks">
@@ -246,6 +263,16 @@ const MessageRow = memo(function MessageRow({ m, mine, start, end, group, uid }:
             </button>
           </div>
         </div>
+        {m.effect && (
+          <div className="fx-tag">
+            <span>Sent with {effectLabel(m.effect)}</span>
+            {m.effect !== 'invisible' && (
+              <button onClick={() => replayEffect(m)} title="Replay">
+                Replay
+              </button>
+            )}
+          </div>
+        )}
         {m.edited && <div className="edited">Edited</div>}
         {m.urgent && (
           <div className="edited">
@@ -368,6 +395,16 @@ function Messages({ c }: { c: Chat }) {
     const el = ref.current
     if (el) el.scrollTop = el.scrollHeight
   }
+
+  // Screen effects play once per device, for the newest unseen one (like iMessage
+  // when you open the conversation or it arrives while you're in it).
+  useEffect(() => {
+    const m = [...msgs].reverse().find((x) => isScreenEffect(x.effect) && !x.deleted)
+    if (!m || fxSeen(m.id) || document.visibilityState !== 'visible') return
+    markFxSeen(m.id)
+    const t = setTimeout(() => playScreenEffect(m.effect!, m.text || effectLabel(m.effect), m.id), 150)
+    return () => clearTimeout(t)
+  }, [msgs])
 
   useEffect(() => {
     setNearBottomProbe(() => near(250))
@@ -575,10 +612,14 @@ function Composer({ c }: { c: Chat }) {
     t.style.height = `${Math.min(t.scrollHeight, 180)}px`
   }, [text])
 
-  const send = () => {
+  const [fxOpen, setFxOpen] = useState(false)
+  const press = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const send = (effect?: EffectId) => {
     const body = text.trim()
     if (!body) return
     setText('')
+    setFxOpen(false)
     if (editing) {
       set({ editing: null })
       void editMessage(c, editing, body)
@@ -586,7 +627,7 @@ function Composer({ c }: { c: Chat }) {
     }
     const r = get().replyTo
     set({ replyTo: null })
-    void postMessage(c, { text: body, replyTo: r })
+    void postMessage(c, { text: body, replyTo: r, effect })
   }
 
   const cancel = () => {
@@ -594,12 +635,31 @@ function Composer({ c }: { c: Chat }) {
     set({ editing: null, replyTo: null })
   }
 
-  const attachFile = async (f: File) => {
-    if (await sendImage(c, f, text.trim())) setText('')
+  const attachFiles = async (files: File[]) => {
+    const caption = text.trim()
+    if (await sendFiles(c, files, caption)) setText('')
+  }
+
+  // iMessage: press and hold send (or right-click) to pick an effect.
+  const holdStart = (e: React.PointerEvent) => {
+    // Only a primary press/touch can send; a right-click must only open the picker.
+    if (editing || e.button !== 0) return
+    press.current = setTimeout(() => {
+      press.current = null
+      setFxOpen(true)
+    }, 450)
+  }
+  const holdEnd = () => {
+    if (press.current) {
+      clearTimeout(press.current)
+      press.current = null
+      send()
+    }
   }
 
   return (
     <footer className="composer">
+      <UploadBar />
       {editing ? (
         <div className="comp-bar">
           <Ic name="pencil" />
@@ -622,9 +682,10 @@ function Composer({ c }: { c: Chat }) {
         </div>
       ) : null}
       <div className="comp-row">
-        <button className="comp-plus" title="Send a photo" onClick={() => file.current?.click()}>
+        <button className="comp-plus" title="Send photos or videos" onClick={() => file.current?.click()}>
           <Ic name="plus" />
         </button>
+        <CameraButton c={c} />
         <button
           className="comp-plus comp-emoji"
           title="Emoji"
@@ -665,32 +726,47 @@ function Composer({ c }: { c: Chat }) {
               }
             }}
             onPaste={(e) => {
-              const f = [...e.clipboardData.files].find((x) => x.type.startsWith('image/'))
-              if (f) {
+              const files = [...e.clipboardData.files].filter((x) => /^(image|video)\//.test(x.type))
+              if (files.length) {
                 e.preventDefault()
-                void attachFile(f)
+                void attachFiles(files)
               }
             }}
             onBlur={() => setTimeout(stopTyping, 200)}
           />
-          {!!text.trim() && (
-            <button className="send-btn" title="Send" onClick={send}>
+          {text.trim() ? (
+            <button
+              className="send-btn"
+              title="Send (hold or right-click for effects)"
+              onPointerDown={holdStart}
+              onPointerUp={holdEnd}
+              onPointerLeave={() => press.current && (clearTimeout(press.current), (press.current = null))}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                if (!editing) setFxOpen(true)
+              }}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), send())}
+            >
               <Ic name="up" />
             </button>
+          ) : (
+            !editing && <MicButton c={c} />
           )}
         </div>
       </div>
       <input
         ref={file}
         type="file"
-        accept="image/*"
+        accept="image/*,video/*"
+        multiple
         hidden
         onChange={(e) => {
-          const f = e.target.files?.[0]
+          const files = [...(e.target.files ?? [])]
           e.target.value = ''
-          if (f) void attachFile(f)
+          if (files.length) void attachFiles(files)
         }}
       />
+      {fxOpen && <EffectPicker text={text.trim()} onSend={(fx) => send(fx)} onClose={() => setFxOpen(false)} />}
     </footer>
   )
 }
@@ -884,8 +960,8 @@ export function ChatView({ id }: { id: string }) {
         onDrop={(e) => {
           e.preventDefault()
           setDrop(false)
-          const f = [...e.dataTransfer.files].find((x) => x.type.startsWith('image/'))
-          if (f) return void sendImage(c, f, '')
+          const files = [...e.dataTransfer.files].filter((x) => /^(image|video)\//.test(x.type))
+          if (files.length) return void sendFiles(c, files, '')
           // A GIF dragged straight from another web page arrives as a link, not a file.
           const url = (e.dataTransfer.getData('text/uri-list') || '').split('\n')[0].trim()
           if (/^https:\/\/\S+\.gif(\?\S*)?$/i.test(url)) sendGif(url)

@@ -59,6 +59,11 @@ export interface Message {
   edited?: boolean
   deleted?: boolean
   reactions?: Record<string, string>
+  /** iMessage-style send effect (bubble or screen). */
+  effect?: string
+  media?: Media
+  /** Whisper transcript of a voice message. */
+  transcript?: string
   pending?: boolean
 }
 
@@ -71,3 +76,22 @@ export interface Rel {
 }
 
 export type Route = { view: 'home' } | { view: 'friends' } | { view: 'chat'; id: string }
+
+/** A file in Firebase Storage attached to a message. */
+export interface Media {
+  kind: 'image' | 'video' | 'audio'
+  url: string
+  path: string
+  mime: string
+  size: number
+  w?: number
+  h?: number
+  /** seconds, for video and audio */
+  dur?: number
+  /** small blurred preview (data URL) shown while the file loads */
+  thumb?: string
+  /** audio waveform, 0–1 peaks */
+  peaks?: number[]
+  /** Whisper transcript, for voice messages */
+  transcript?: string
+}

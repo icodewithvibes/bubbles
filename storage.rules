@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// Media for messages lives at chats/{chatId}/{messageId}/{file}.
+// Only members of that chat can read or upload, with a size cap per kind.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function member(chatId) {
+      return request.auth != null
+        && request.auth.uid in firestore.get(/databases/(default)/documents/chats/$(chatId)).data.members;
+    }
+
+    match /chats/{chatId}/{messageId}/{file} {
+      allow read: if member(chatId);
+      allow create: if member(chatId)
+        && (
+          (request.resource.contentType.matches('image/.*') && request.resource.size < 25 * 1024 * 1024)
+          || (request.resource.contentType.matches('video/.*') && request.resource.size < 200 * 1024 * 1024)
+          || (request.resource.contentType.matches('audio/.*') && request.resource.size < 25 * 1024 * 1024)
+        );
+      // Unsend removes the file.
+      allow delete: if member(chatId);
+      allow update: if false;
+    }
+  }
+}

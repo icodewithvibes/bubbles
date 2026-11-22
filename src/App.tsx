@@ -5,6 +5,7 @@ import { ChatView } from '@/components/Chat'
 import { maybeShowPatchNotes } from '@/components/WhatsNew'
 import { FriendsView } from '@/components/Friends'
 import { Rail, Sidebar } from '@/components/Shell'
+import { ScreenEffects } from '@/components/Effects'
 import { ModalHost, PopoverHost, Toasts } from '@/components/ui'
 import { useStore } from '@/store'
 import { ThemeBackground } from '@/themes'
@@ -42,6 +43,7 @@ export default function App() {
       <PopoverHost />
       <ModalHost />
       <Toasts />
+      <ScreenEffects />
     </>
   )
 }

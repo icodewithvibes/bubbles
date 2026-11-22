@@ -415,7 +415,9 @@ code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-si
 .bubble pre code { background: none; padding: 0; }
 .spoiler { background: currentColor; border-radius: 4px; cursor: pointer; transition: background .2s; }
 .spoiler.shown { background: rgba(0, 0, 0, .15); }
-.msg-img { max-width: min(320px, 100%); max-height: 360px; border-radius: var(--radius); display: block; cursor: zoom-in; background: var(--bg-3); }
+/* A % max-width is ignored when the bubble sizes itself, which made the bubble as wide as the
+   photo's original pixels and pushed tapbacks off the photo. Viewport-based caps don't have that problem. */
+.msg-img { max-width: min(320px, 62vw); max-height: 360px; border-radius: var(--radius); display: block; cursor: zoom-in; background: var(--bg-3); }
 .edited { font-size: 11px; color: var(--text-3); margin: 2px 6px 0; display: flex; align-items: center; gap: 3px; }
 .edited svg { width: 10px; height: 10px; color: var(--moon); }
 .reply-ref {
