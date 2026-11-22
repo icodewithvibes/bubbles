@@ -29,9 +29,38 @@ const NOTES: Note[] = [
     wide: true,
     hue: 280,
   },
-  { icon: '⚡', title: 'Rebuilt & faster', text: 'A brand-new engine under the hood. Opens quicker, scrolls smoother.', hue: 210 },
-  { icon: '🛟', title: 'Messages never vanish', text: "If your browser's saved data breaks, Bubbles fixes itself. No more clearing cookies.", hue: 150 },
-  { icon: '⭕', title: 'Little fixes', text: 'Profile pictures stay perfectly round everywhere, including Create a Group.', wide: true, hue: 30 },
+  {
+    icon: '✨',
+    title: 'Send with effects',
+    text: (
+      <>
+        Hold or right-click <b>send</b> for Slam, Invisible Ink, Echo, Confetti, Fireworks and more.
+      </>
+    ),
+    hue: 320,
+  },
+  {
+    icon: '🎤',
+    title: 'Voice messages',
+    text: (
+      <>
+        Tap the <b>mic</b> to record. Bubbles writes a transcript for you.
+      </>
+    ),
+    hue: 190,
+  },
+  {
+    icon: '📸',
+    title: 'Camera & videos',
+    text: (
+      <>
+        Snap photos or record videos right in the chat with the <b>camera</b> button.
+      </>
+    ),
+    hue: 40,
+  },
+  { icon: '⚡', title: 'Rebuilt & faster', text: 'A brand-new engine. Opens quicker, scrolls smoother.', hue: 210 },
+  { icon: '🛟', title: 'Messages never vanish', text: "If your browser's saved data breaks, Bubbles fixes itself. No more clearing cookies.", wide: true, hue: 150 },
 ]
 
 function GlowCard({ note, i }: { note: Note; i: number }) {
