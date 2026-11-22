@@ -34,6 +34,8 @@ export interface AppState {
   /** Message to scroll to and highlight once rendered. */
   jumpTarget: string | null
   searchOpen: boolean
+  /** What the right-hand panel opened for: finding text, or jumping through time. */
+  searchMode: 'search' | 'time'
   wall: string | null
   replyTo: { id: string; senderId: string; text: string } | null
   editing: Message | null
@@ -64,6 +66,7 @@ export const initialState: AppState = {
   hasNewer: false,
   jumpTarget: null,
   searchOpen: false,
+  searchMode: 'search',
   wall: null,
   replyTo: null,
   editing: null,

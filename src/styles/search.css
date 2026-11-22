@@ -70,3 +70,52 @@
 
 /* Viewing older messages */
 .jump.history-jump { background: var(--accent); color: #fff; border-color: transparent; }
+
+/* ---------- Mode switch & big buttons ---------- */
+.sp-hint { padding: 6px 14px; }
+.sp-hint p { margin: 4px 2px 14px; color: var(--text-2); font-size: 13.5px; line-height: 1.45; }
+.sp-switch {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; text-align: left;
+  background: var(--bg-3); border: 1px solid var(--line);
+}
+.sp-switch:hover { border-color: var(--accent); }
+.sp-switch > span { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.sp-switch b { font-size: 14px; }
+.sp-switch small { color: var(--text-2); font-size: 12.5px; }
+.sp-switch > span:first-child, .sp-switch > svg:first-child { color: var(--accent); }
+.sp-switch svg { width: 20px; height: 20px; flex: none; }
+.sp-switch-bottom { margin: 18px 14px 0; width: calc(100% - 28px); }
+.sp-big {
+  display: flex; align-items: center; gap: 12px; width: calc(100% - 28px); margin: 6px 14px 4px; padding: 14px; border-radius: 14px;
+  text-align: left; background: var(--accent); color: #fff; box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.sp-big:hover { filter: brightness(1.06); }
+.sp-big > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.sp-big b { font-size: 15px; }
+.sp-big small { opacity: .85; font-size: 12.5px; }
+.sp-big-ic { font-size: 22px; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: rgba(255, 255, 255, .18); }
+.sp-date svg { width: 18px; height: 18px; color: var(--text-3); flex: none; }
+.search-panel .sp-results > .sp-status { padding-top: 2px; }
+
+/* ---------- In-chat time travel ---------- */
+.tt-pill {
+  position: absolute; top: 82px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 999px; font-size: 13.5px; font-weight: 600; color: var(--text);
+  background: var(--glass); backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid var(--line-2); box-shadow: var(--shadow); animation: tt-in .2s ease-out;
+}
+.tt-pill svg { width: 16px; height: 16px; color: var(--accent); }
+.tt-pill:hover { border-color: var(--accent); }
+@keyframes tt-in { from { opacity: 0; transform: translate(-50%, -8px); } }
+.tt-scrubber {
+  position: absolute; right: 6px; top: 84px; bottom: 76px; z-index: 6; display: flex; flex-direction: column; justify-content: center;
+  gap: 2px; padding: 6px 4px; border-radius: 12px; overflow-y: auto; scrollbar-width: none; animation: tt-fade .2s ease-out;
+  background: color-mix(in srgb, var(--glass) 80%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--line);
+}
+.tt-scrubber::-webkit-scrollbar { display: none; }
+@keyframes tt-fade { from { opacity: 0; } }
+.tt-mark { font-size: 11px; font-weight: 700; color: var(--text-2); padding: 3px 6px; border-radius: 7px; text-align: center; white-space: nowrap; }
+.tt-mark:hover { color: #fff; background: var(--accent); }
+.tt-start { color: var(--accent); }
+@media (max-width: 700px) { .tt-scrubber { right: 2px; } .tt-mark { font-size: 10px; padding: 3px 4px; } }

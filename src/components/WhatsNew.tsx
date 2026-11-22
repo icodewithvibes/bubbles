@@ -7,7 +7,7 @@ import { useRef, type ReactNode } from 'react'
 import { closeModal, get, openModal } from '@/store'
 import { Ic } from './ui'
 
-export const APP_VERSION = '2.2.0'
+export const APP_VERSION = '2.2.1'
 
 interface Note {
   icon: string
@@ -41,10 +41,10 @@ const NOTES: Note[] = [
   },
   {
     icon: '🔎',
-    title: 'Search & time travel',
+    title: 'Go back in time',
     text: (
       <>
-        Tap <b>🔍</b> in any chat (or Ctrl+F) to find any message, or jump to the <b>first messages ever</b>, a date, or any week.
+        Tap the <b>clock</b> at the top of a chat (or just scroll up) to go back to the <b>first messages ever</b>, any day or any week. Tap <b>🔍</b> to search by a word.
       </>
     ),
     wide: true,

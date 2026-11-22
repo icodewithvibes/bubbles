@@ -40,7 +40,7 @@ import { themeHasBackdrop } from '@/themes'
 import { EffectPicker, effectLabel, fxSeen, isBubbleEffect, isScreenEffect, markFxSeen, playScreenEffect, type EffectId } from './Effects'
 import { CameraButton, MediaContent, MicButton, UploadBar, sendFiles } from './Media'
 import { openEmojiPicker, openGifPicker } from './Pickers'
-import { SearchPanel } from './Search'
+import { SearchPanel, TimeTravelOverlay } from './Search'
 import { openStickerPicker, stickerUrl } from './Stickers'
 import { ChatAvatar, Ic, Logo, Modal, Moon, Rich, UserAvatar, closePopover, isPopoverOpen, openMenu, openPopover } from './ui'
 
@@ -401,6 +401,8 @@ function Messages({ c }: { c: Chat }) {
   const [jump, setJump] = useState(false)
   const history = useStore((s) => s.history)
   const jumpTarget = useStore((s) => s.jumpTarget)
+  // Scrolled a screen or more up from the newest message: offer time travel.
+  const [scrolledUp, setScrolledUp] = useState(false)
 
   const near = useCallback((px = 120) => {
     const el = ref.current
@@ -472,6 +474,8 @@ function Messages({ c }: { c: Chat }) {
           }
           // Viewing older messages: keep loading newer ones as you scroll down.
           if (history && near(500)) void loadNewer()
+          const up = el.scrollHeight - el.scrollTop - el.clientHeight > el.clientHeight * 1.1
+          if (up !== scrolledUp) setScrolledUp(up)
           maybeMarkRead()
           if (isPopoverOpen('tapback-picker')) closePopover()
         }}
@@ -501,6 +505,7 @@ function Messages({ c }: { c: Chat }) {
         </div>
         <Typing c={c} />
       </div>
+      <TimeTravelOverlay c={c} show={scrolledUp || history} />
       {history ? (
         <button className="jump history-jump" onClick={() => backToLatest()}>
           <Ic name="down" /> Jump to latest
@@ -528,6 +533,7 @@ function Messages({ c }: { c: Chat }) {
 function ChatHead({ c }: { c: Chat }) {
   const detailsOpen = useStore((s) => s.detailsOpen)
   const searchOpen = useStore((s) => s.searchOpen)
+  const searchMode = useStore((s) => s.searchMode)
   useStore((s) => s.tick)
   useStore((s) => s.users)
   const dm = c.type === 'dm'
@@ -562,9 +568,18 @@ function ChatHead({ c }: { c: Chat }) {
           </button>
         )}
         <button
-          className={`icon-btn ch-search ${searchOpen ? 'on' : ''}`}
-          title="Search & jump to date (Ctrl+F)"
-          onClick={() => set({ searchOpen: !searchOpen, detailsOpen: false })}
+          className={`icon-btn ch-search ${searchOpen && searchMode === 'time' ? 'on' : ''}`}
+          title="Go back in time: first messages, a date, or a week"
+          aria-label="Go back in time"
+          onClick={() => set({ searchOpen: !(searchOpen && searchMode === 'time'), searchMode: 'time', detailsOpen: false })}
+        >
+          <Ic name="history" />
+        </button>
+        <button
+          className={`icon-btn ch-search ${searchOpen && searchMode === 'search' ? 'on' : ''}`}
+          title="Search messages (Ctrl+F)"
+          aria-label="Search messages"
+          onClick={() => set({ searchOpen: !(searchOpen && searchMode === 'search'), searchMode: 'search', detailsOpen: false })}
         >
           <Ic name="search" />
         </button>
@@ -988,7 +1003,7 @@ export function ChatView({ id }: { id: string }) {
     const k = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault()
-        set({ searchOpen: true, detailsOpen: false })
+        set({ searchOpen: true, searchMode: 'search', detailsOpen: false })
       }
     }
     document.addEventListener('keydown', k)
