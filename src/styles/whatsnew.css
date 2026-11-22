@@ -1,0 +1,111 @@
+/* "What's new" popup */
+.modal.wn {
+  width: min(560px, calc(100vw - 32px));
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.wn-hero {
+  position: relative;
+  padding: 28px 24px 20px;
+  overflow: hidden;
+  isolation: isolate;
+}
+.wn-aurora {
+  position: absolute;
+  inset: -40%;
+  z-index: -1;
+  background:
+    radial-gradient(40% 50% at 25% 40%, color-mix(in srgb, var(--accent) 55%, transparent), transparent 70%),
+    radial-gradient(35% 45% at 75% 30%, #b15cff88, transparent 70%),
+    radial-gradient(40% 50% at 60% 80%, #ff5c8a66, transparent 70%);
+  filter: blur(28px);
+  opacity: 0.55;
+  animation: wn-drift 14s ease-in-out infinite alternate;
+}
+@keyframes wn-drift {
+  to { transform: translate(6%, -4%) rotate(12deg) scale(1.08); }
+}
+.wn-close { position: absolute; top: 12px; right: 12px; }
+.wn-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+}
+.wn-title {
+  margin: 10px 0 4px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(100deg, var(--text) 30%, var(--accent) 45%, #c77dff 55%, var(--text) 70%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: wn-shimmer 4s ease-in-out infinite;
+}
+@keyframes wn-shimmer {
+  0% { background-position: 100% 0; }
+  60%, 100% { background-position: -50% 0; }
+}
+.wn-sub { margin: 0; color: var(--text-2); font-size: 14.5px; }
+.wn-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 4px 16px 16px;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+.wn-card {
+  --mx: 50%;
+  --my: 50%;
+  position: relative;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--bg-2, var(--card));
+  border: 1px solid var(--line);
+  overflow: hidden;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.wn-card.wide { grid-column: span 2; }
+.wn-card::before {
+  /* glow that follows the pointer */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(220px circle at var(--mx) var(--my), hsl(var(--h) 90% 60% / 0.18), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+}
+.wn-card:hover::before { opacity: 1; }
+.wn-card:hover { border-color: hsl(var(--h) 80% 60% / 0.55); transform: translateY(-1px); }
+.wn-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 19px;
+  margin-bottom: 8px;
+  background: hsl(var(--h) 85% 60% / 0.16);
+}
+.wn-card > b { display: block; font-size: 15px; margin-bottom: 3px; }
+.wn-card p b { color: var(--text); font-weight: 600; }
+.wn-card p { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--text-2); }
+.wn-foot { padding: 0 16px 16px; }
+.wn-go { width: 100%; }
+@media (max-width: 520px) {
+  .wn-grid { grid-template-columns: 1fr; }
+  .wn-card.wide { grid-column: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wn-aurora, .wn-title { animation: none; }
+}
