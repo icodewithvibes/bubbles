@@ -204,8 +204,8 @@ service cloud.firestore {
           allow create: if signedIn() && me() in chatNow().members
             && request.resource.data.keys().hasOnly(['d', 'i', 'n', 'by'])
             && request.resource.data.by == me()
-            && request.resource.data.d is string
-            && request.resource.data.d.size() <= 700000
+            && ((request.resource.data.d is bytes && request.resource.data.d.size() <= 900000)
+              || (request.resource.data.d is string && request.resource.data.d.size() <= 700000))
             && request.resource.data.i is int
             && request.resource.data.n is int
             && request.resource.data.n <= 60;

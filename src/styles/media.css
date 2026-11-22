@@ -7,6 +7,18 @@
 }
 .media-frame .msg-img, .media-frame .msg-video { display: block; width: 100%; height: 100%; object-fit: cover; max-height: 420px; border-radius: 0; }
 .media-frame .msg-video { background: #000; }
+/* Sent instantly: sharp preview + spinner while the full file uploads. */
+.media-preview { filter: saturate(.9); }
+.media-sending {
+  position: absolute; right: 8px; bottom: 8px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(0, 0, 0, .5); backdrop-filter: blur(6px);
+}
+.media-sending .mk-spinner { width: 18px; height: 18px; border-width: 2.5px; border-color: rgba(255, 255, 255, .35); border-top-color: #fff; }
+.media-failed {
+  position: absolute; inset: auto 8px 8px auto; padding: 3px 10px; border-radius: 10px; font-size: 12px; font-weight: 600;
+  background: var(--danger); color: #fff;
+}
+.audio-spin { width: 14px; height: 14px; border-width: 2px; border-color: currentColor; border-top-color: transparent; opacity: .8; }
 /* Video waiting to be tapped: blurred thumbnail with a play button. */
 .video-cover {
   position: relative; display: grid; place-items: center; width: min(320px, 62vw); aspect-ratio: inherit; min-height: 160px;

@@ -11,12 +11,15 @@ import {
   prepareImage,
   probeImage,
   probeVideo,
+  PENDING,
+  FAILED,
+  storageReady,
   uploadFile,
   useUploads,
 } from '@/lib/media'
 import type { Chat, Media, Message } from '@/lib/types'
 import { transcribe, transcribeEnabled } from '@/lib/whisper'
-import { newMessageId, postMessage, setTranscript } from '@/services/session'
+import { newMessageId, postMessage, setMedia, setTranscript } from '@/services/session'
 import { closeModal, get, openModal, set, toast } from '@/store'
 import { openLightbox } from './Dialogs'
 import { Ic } from './ui'
@@ -24,27 +27,51 @@ import { Ic } from './ui'
 // ============================================================================
 // Sending
 // ============================================================================
-async function sendOne(c: Chat, file: File, caption: string, replyTo: Message['replyTo'] | null) {
-  const isVideo = file.type.startsWith('video/')
-  const kind: Media['kind'] = isVideo ? 'video' : 'image'
-  if (file.size > LIMITS[kind]) throw new Error(`That ${kind === 'video' ? 'video' : 'photo'} is over ${mb(LIMITS[kind])}.`)
-  const id = newMessageId(c.id)
-  const blob = isVideo ? file : await prepareImage(file)
-  const info = isVideo ? await probeVideo(blob) : await probeImage(blob)
+/**
+ * Upload a file for message `id`: Storage when it exists, Firestore pieces otherwise.
+ * Returns the final url/path.
+ */
+async function uploadAny(c: Chat, id: string, blob: Blob, name: string, kind: Media['kind']) {
   const path = `chats/${c.id}/${id}/${kind}.${extFor(blob.type)}`
-  let media: Media
   try {
-    const url = await uploadFile(path, blob, id, file.name, kind)
-    media = { kind, url, path, mime: blob.type, size: blob.size, ...info }
+    return { url: await uploadFile(path, blob, id, name, kind), path }
   } catch (e) {
     if (!(e instanceof NoStorageError)) throw e
     // No Storage yet (needs Blaze): store the file in Firestore pieces instead.
     if (blob.size > CHUNK_LIMITS[kind])
-      throw new Error(`Until Storage is turned on, ${kind === 'video' ? 'videos' : 'photos'} can be up to ${mb(CHUNK_LIMITS[kind])}.`)
-    const url = await uploadChunked(c.id, id, blob, file.name, kind)
-    media = { kind, url, path: '', mime: blob.type, size: blob.size, ...info }
+      throw new Error(`Until Storage is turned on, ${kind === 'video' ? 'videos' : kind === 'audio' ? 'voice messages' : 'photos'} can be up to ${mb(CHUNK_LIMITS[kind])}.`)
+    return { url: await uploadChunked(c.id, id, blob, name, kind), path: '' }
   }
-  await postMessage(c, { id, text: caption, media, replyTo })
+}
+
+/**
+ * iMessage-style instant send: the message (with a sharp preview) is posted
+ * right away so it shows up for everyone immediately, then the full file
+ * uploads in the background and the message is updated to point at it.
+ */
+async function sendMediaNow(c: Chat, blob: Blob, name: string, base: Omit<Media, 'url' | 'path'>, extra: { text?: string; replyTo?: Message['replyTo'] | null } = {}) {
+  const id = newMessageId(c.id)
+  const pending: Media = { ...base, url: PENDING, path: '' }
+  await postMessage(c, { id, text: extra.text ?? '', media: pending, replyTo: extra.replyTo ?? null })
+  try {
+    const { url, path } = await uploadAny(c, id, blob, name, base.kind)
+    await setMedia(c.id, id, { ...pending, url, path })
+  } catch (e) {
+    await setMedia(c.id, id, { ...pending, url: FAILED }).catch(() => {})
+    throw e
+  }
+  return id
+}
+
+async function sendOne(c: Chat, file: File, caption: string, replyTo: Message['replyTo'] | null) {
+  const isVideo = file.type.startsWith('video/')
+  const kind: Media['kind'] = isVideo ? 'video' : 'image'
+  if (file.size > LIMITS[kind]) throw new Error(`That ${kind === 'video' ? 'video' : 'photo'} is over ${mb(LIMITS[kind])}.`)
+  if (file.size > CHUNK_LIMITS[kind] && !(await storageReady()))
+    throw new Error(`Until Storage is turned on, ${isVideo ? 'videos' : 'photos'} can be up to ${mb(CHUNK_LIMITS[kind])}.`)
+  const blob = isVideo ? file : await prepareImage(file)
+  const info = isVideo ? await probeVideo(blob) : await probeImage(blob)
+  await sendMediaNow(c, blob, file.name, { kind, mime: blob.type, size: blob.size, ...info }, { text: caption, replyTo })
 }
 
 /** Send photos and videos (picked, pasted, dropped or from the camera). */
@@ -93,15 +120,20 @@ const fmtDur = (s = 0) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).pa
  */
 function useMediaUrl(m: Message, eager: boolean) {
   const media = m.media!
+  const pending = media.url === PENDING
+  const failed = media.url === FAILED
   const chunked = isChunked(media.url)
-  const [url, setUrl] = useState<string | null>(chunked ? null : media.url)
+  const ready = !pending && !failed && !chunked ? media.url : null
+  const [stitched, setStitched] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const url = ready ?? stitched
   const load = async () => {
     if (url) return url
+    if (!chunked) return null
     setLoading(true)
     try {
       const u = await loadChunked(get().msgChatId ?? '', m.id, media.mime)
-      setUrl(u)
+      setStitched(u)
       return u
     } catch {
       toast("Couldn't load that file", 'error')
@@ -110,11 +142,20 @@ function useMediaUrl(m: Message, eager: boolean) {
       setLoading(false)
     }
   }
+  // Prefetch as soon as the upload finishes (media.url flips from "pending").
   useEffect(() => {
-    if (eager && chunked && !url) void load()
+    if (eager && chunked && !stitched) void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eager, chunked])
-  return { url, load, loading }
+  }, [eager, chunked, media.url])
+  return { url, load, loading, pending, failed }
+}
+
+function Sending() {
+  return (
+    <span className="media-sending" title="Sending…">
+      <span className="mk-spinner" />
+    </span>
+  )
 }
 
 function AudioBubble({ m, fxClass }: { m: Message; fxClass: string }) {
@@ -128,14 +169,15 @@ function AudioBubble({ m, fxClass }: { m: Message; fxClass: string }) {
   const dur = media.dur ?? 0
   const peaks = media.peaks?.length ? media.peaks : Array.from({ length: 40 }, () => 0.3)
   const transcript = m.transcript ?? localText
-  const src = useMediaUrl(m, false)
+  // Voice notes are small: fetch right away so play is instant.
+  const src = useMediaUrl(m, true)
   return (
     <div className={`bubble audio-bubble ${fxClass}`}>
       <div className="audio-row">
         <button
           className="audio-play"
-          aria-label={playing ? 'Pause' : 'Play'}
-          disabled={src.loading}
+          aria-label={src.pending ? 'Sending' : playing ? 'Pause' : 'Play'}
+          disabled={src.loading || src.pending || src.failed}
           onClick={async () => {
             const a = audio.current!
             if (!src.url) {
@@ -147,7 +189,7 @@ function AudioBubble({ m, fxClass }: { m: Message; fxClass: string }) {
             else a.pause()
           }}
         >
-          {src.loading ? '…' : playing ? '❚❚' : '▶'}
+          {src.failed ? '!' : src.pending || src.loading ? <span className="mk-spinner audio-spin" /> : playing ? '❚❚' : '▶'}
         </button>
         <div
           className="audio-wave"
@@ -216,16 +258,22 @@ function AudioBubble({ m, fxClass }: { m: Message; fxClass: string }) {
 export function MediaContent({ m, fxClass }: { m: Message; fxClass: string }) {
   const media = m.media!
   const [loaded, setLoaded] = useState(false)
-  // Photos load right away; videos only when someone taps play (they're big).
-  const src = useMediaUrl(m, media.kind === 'image')
+  // Photos and short videos prefetch the moment they're ready; long videos wait for a tap.
+  const src = useMediaUrl(m, media.kind === 'image' || media.size < 8 * 1024 * 1024)
   const [autoPlay, setAutoPlay] = useState(false)
   const ratio = media.w && media.h ? `${media.w} / ${media.h}` : undefined
   if (media.kind === 'audio') return <AudioBubble m={m} fxClass={fxClass} />
   return (
     <>
       <div className={`media-frame ${fxClass}`} style={{ aspectRatio: ratio, backgroundImage: !loaded && media.thumb ? `url("${media.thumb}")` : undefined }}>
-        {media.kind === 'image' ? (
-          src.url && <img className="msg-img" src={src.url} alt="Photo" loading="lazy" onLoad={() => setLoaded(true)} onClick={() => openLightbox(src.url!)} />
+        {(src.pending || src.failed) && (
+          <>
+            {media.thumb && <img className="msg-img media-preview" src={media.thumb} alt={media.kind === 'image' ? 'Photo' : 'Video'} />}
+            {src.failed ? <span className="media-failed">Couldn't send</span> : <Sending />}
+          </>
+        )}
+        {src.pending || src.failed ? null : media.kind === 'image' ? (
+          src.url && <img className="msg-img" src={src.url} alt="Photo" onLoad={() => setLoaded(true)} onClick={() => openLightbox(src.url!)} />
         ) : src.url ? (
           <video className="msg-video" src={src.url} poster={media.thumb} controls autoPlay={autoPlay} playsInline preload="metadata" onLoadedData={() => setLoaded(true)} />
         ) : (
@@ -257,24 +305,21 @@ export function MediaContent({ m, fxClass }: { m: Message; fxClass: string }) {
 const pickAudioMime = () => ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus'].find((t) => MediaRecorder.isTypeSupported(t)) ?? ''
 
 async function sendVoice(c: Chat, blob: Blob) {
-  const id = newMessageId(c.id)
   const { peaks, dur } = await audioPeaks(blob)
   const mime = blob.type || 'audio/webm'
-  const path = `chats/${c.id}/${id}/voice.${extFor(mime)}`
-  let media: Media
-  try {
-    const url = await uploadFile(path, blob, id, 'voice message', 'audio')
-    media = { kind: 'audio', url, path, mime, size: blob.size, dur, peaks }
-  } catch (e) {
-    if (!(e instanceof NoStorageError)) throw e
-    // Opus voice is tiny (~30 KB per 10 s), so it fits inline until Storage is on.
-    // Short clips (~30 KB per 10 s) fit inline; longer ones go into Firestore pieces.
-    let url = await blobToDataUrl(blob)
-    if (url.length > LIMITS.inline) url = await uploadChunked(c.id, id, blob, 'voice message', 'audio')
-    media = { kind: 'audio', url, path: '', mime, size: blob.size, dur, peaks }
-  }
-  await postMessage(c, { id, media, replyTo: get().replyTo })
+  const replyTo = get().replyTo
   set({ replyTo: null })
+  const base = { kind: 'audio' as const, mime, size: blob.size, dur, peaks }
+  let id: string
+  // Fastest path: Opus voice is ~30 KB per 10 s, so most clips ride inside the
+  // message itself — one write, and the other person can play it instantly.
+  const inline = (await storageReady()) ? null : await blobToDataUrl(blob)
+  if (inline && inline.length <= LIMITS.inline) {
+    id = newMessageId(c.id)
+    await postMessage(c, { id, media: { ...base, url: inline, path: '' }, replyTo })
+  } else {
+    id = await sendMediaNow(c, blob, 'voice message', base, { replyTo })
+  }
   // Whisper runs in the background, then the transcript appears for everyone.
   if (transcribeEnabled()) {
     transcribe(blob)
@@ -473,7 +518,7 @@ function CameraModal({ c }: { c: Chat }) {
     if (recorder.current) return recorder.current.stop()
     if (!stream) return
     const mime = pickVideoMime()
-    const r = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 3_500_000 } : undefined)
+    const r = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 2_500_000 } : undefined)
     const parts: Blob[] = []
     r.ondataavailable = (e) => e.data.size && parts.push(e.data)
     r.onstop = () => {

@@ -804,3 +804,6 @@ export function watchForUpdates() {
   setInterval(checkForUpdate, 60e3)
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && void checkForUpdate())
 }
+
+/** Sender swaps a pending upload for the finished file (or marks it failed). */
+export const setMedia = (chatId: string, msgId: string, media: Message['media']) => updateDoc(msgRef(chatId, msgId), { media })

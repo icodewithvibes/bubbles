@@ -44,7 +44,7 @@ export class NoStorageError extends Error {
 // ~10 minutes, so sends sat at 0%. Ask the bucket directly first (fast 404
 // when it doesn't exist; 401/403 means it exists but needs auth).
 let probe: Promise<boolean> | null = null
-function storageAvailable(): Promise<boolean> {
+export function storageReady(): Promise<boolean> {
   if (storageOk !== null) return Promise.resolve(storageOk)
   probe ??= fetch(`https://firebasestorage.googleapis.com/v0/b/${storage.app.options.storageBucket}/o?maxResults=1`)
     .then((r) => r.status !== 404)
@@ -65,7 +65,7 @@ const isNoBucket = (e: unknown) => {
 }
 
 export async function uploadFile(path: string, blob: Blob, uploadId: string, name: string, kind: Media['kind']): Promise<string> {
-  if (!(await storageAvailable())) throw new NoStorageError()
+  if (!(await storageReady())) throw new NoStorageError()
   return new Promise((resolve, reject) => {
     const task = uploadBytesResumable(ref(storage, path), blob, { contentType: blob.type, cacheControl: 'public,max-age=31536000,immutable' })
     setUpload({ id: uploadId, name, kind, progress: 0 })
@@ -104,13 +104,22 @@ const loadImage = (url: string) =>
     im.src = url
   })
 
+/**
+ * A sharp, small preview (~20–35 KB) stored in the message itself, so the other
+ * person sees the photo/video frame the instant the message arrives, while the
+ * full-quality file is still uploading.
+ */
 function thumbFrom(src: CanvasImageSource, w: number, h: number) {
-  const s = 24 / Math.max(w, h)
+  const s = Math.min(1, 360 / Math.max(w, h))
   const c = document.createElement('canvas')
   c.width = Math.max(1, Math.round(w * s))
   c.height = Math.max(1, Math.round(h * s))
   c.getContext('2d')!.drawImage(src, 0, 0, c.width, c.height)
-  return c.toDataURL('image/jpeg', 0.6)
+  for (const q of [0.62, 0.5, 0.4]) {
+    const url = c.toDataURL('image/jpeg', q)
+    if (url.length < 60_000) return url
+  }
+  return c.toDataURL('image/jpeg', 0.3)
 }
 
 export async function probeImage(file: Blob) {
@@ -201,3 +210,8 @@ export async function audioPeaks(blob: Blob, bars = 40): Promise<{ peaks: number
     void ctx.close()
   }
 }
+
+/** media.url while the full file is still uploading (the message shows its preview). */
+export const PENDING = 'pending'
+/** media.url when the upload failed after the message was posted. */
+export const FAILED = 'failed'
