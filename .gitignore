@@ -3,3 +3,4 @@ node_modules/
 .firebase/
 firestore-debug.log
 *-debug.log
+dist/
