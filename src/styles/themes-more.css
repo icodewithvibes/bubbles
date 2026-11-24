@@ -185,13 +185,12 @@
    every message, header and composer. */
 .chat-col.layered-wall { isolation: isolate; background: transparent; }
 .wall-layers { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.wall-photo { position: absolute; inset: 0; background: center / cover no-repeat; opacity: 0.9; }
+.wall-photo { position: absolute; inset: 0; background: center / cover no-repeat; }
 /* Hue shift toward the theme color, keeping the photo's light and detail. */
-.wall-tint { position: absolute; inset: 0; background: var(--tint); mix-blend-mode: color; opacity: 0.3; }
+.wall-tint { position: absolute; inset: 0; background: var(--tint); opacity: 0.14; }
 .wall-shade {
   position: absolute; inset: 0;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--tint) 22%, transparent), transparent 45%, color-mix(in srgb, var(--tint) 18%, transparent)),
-    rgba(0, 0, 0, 0.16);
+    linear-gradient(180deg, color-mix(in srgb, var(--tint) 18%, transparent), transparent 40%, transparent 70%, color-mix(in srgb, var(--tint) 14%, transparent));
 }
 .wall-fx { position: absolute; inset: 0; }

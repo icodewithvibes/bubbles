@@ -69,7 +69,12 @@
 .fx-balloon { position: absolute; bottom: 0; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .25)); }
 .fx-heart { position: fixed; font-size: 120px; line-height: 1; filter: drop-shadow(0 10px 30px rgba(255, 45, 85, .5)); }
 .fx-mini-heart { position: fixed; font-size: 26px; }
-.fx-lasers { position: absolute; inset: 0; background: rgba(0, 0, 0, .78); }
+/* Dimming layers fade in and back out purely in CSS and END invisible, so even
+   if the layer were ever left mounted it could never leave the screen dark. */
+.fx-dim { position: absolute; inset: 0; opacity: 0; animation: fx-dim 3.3s ease forwards; }
+@keyframes fx-dim { 12%, 85% { opacity: 1; } 100% { opacity: 0; } }
+.fx-lasers { background: rgba(0, 0, 0, .78); }
+.fx-night { background: rgba(0, 0, 0, .75); animation-duration: 4s; }
 .fx-laser {
   position: absolute; left: 50%; top: 50%; width: 220vmax; height: 6px; margin: -3px 0 0 -110vmax;
   background: linear-gradient(90deg, transparent, hsl(calc(var(--i) * 60) 100% 60%), transparent);

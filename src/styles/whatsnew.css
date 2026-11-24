@@ -109,3 +109,8 @@
 @media (prefers-reduced-motion: reduce) {
   .wn-aurora, .wn-title { animation: none; }
 }
+
+/* Card entrance in CSS (no JS animation that could leave cards invisible). */
+.wn-card { animation: wn-card-in .45s cubic-bezier(.2, .8, .3, 1) backwards; }
+@keyframes wn-card-in { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .wn-card { animation: none; } }

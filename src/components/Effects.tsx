@@ -1,7 +1,7 @@
 // iMessage "Send with Effect": bubble effects play on the message itself,
 // screen effects take over the whole window for a few seconds.
 import confetti from 'canvas-confetti'
-import { AnimatePresence, motion } from 'motion/react'
+import { motion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { create } from 'zustand'
@@ -66,9 +66,11 @@ let fxKey = 0
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 
 export function playScreenEffect(effect: string, text: string, msgId: string) {
-  if (reduceMotion() || !isScreenEffect(effect)) return
-  useFx.setState({ playing: { key: ++fxKey, effect, text, msgId } })
-  const done = () => useFx.setState((s) => (s.playing?.key === fxKey ? { playing: null } : s))
+  // Never play into a hidden tab: timers/animations are throttled there.
+  if (reduceMotion() || !isScreenEffect(effect) || document.visibilityState !== 'visible') return
+  const key = ++fxKey
+  useFx.setState({ playing: { key, effect, text, msgId } })
+  const done = () => useFx.setState((s) => (s.playing?.key === key ? { playing: null } : s))
   // Canvas-confetti effects are fire-and-forget; the others render below.
   if (effect === 'confetti') runConfetti()
   if (effect === 'fireworks') runFireworks()
@@ -148,13 +150,7 @@ function Spotlight({ msgId }: { msgId: string }) {
     setPos({ x: ((r.left + r.width / 2) / innerWidth) * 100, y: ((r.top + r.height / 2) / innerHeight) * 100 })
   }, [msgId])
   return (
-    <motion.div
-      className="absolute inset-0"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: [0, 1, 1, 0] }}
-      transition={{ duration: 3.3, times: [0, 0.15, 0.85, 1] }}
-      style={{ background: `radial-gradient(circle 150px at ${pos.x}% ${pos.y}%, transparent 0 60%, rgba(0,0,0,.82) 100%)` }}
-    >
+    <div className="fx-dim fx-spot" style={{ background: `radial-gradient(circle 150px at ${pos.x}% ${pos.y}%, transparent 0 60%, rgba(0,0,0,.82) 100%)` }}>
       <motion.div
         className="fx-beam"
         style={{ left: `${pos.x}%` }}
@@ -162,7 +158,7 @@ function Spotlight({ msgId }: { msgId: string }) {
         animate={{ scaleY: 1 }}
         transition={{ duration: 0.5, ease: 'easeOut' }}
       />
-    </motion.div>
+    </div>
   )
 }
 
@@ -231,29 +227,27 @@ function Love({ msgId }: { msgId: string }) {
 
 function Lasers() {
   return (
-    <motion.div className="fx-lasers" initial={{ opacity: 0 }} animate={{ opacity: [0, 1, 1, 0] }} transition={{ duration: 3.3, times: [0, 0.1, 0.85, 1] }}>
+    <div className="fx-dim fx-lasers">
       {Array.from({ length: 6 }, (_, i) => (
         <div key={i} className="fx-laser" style={{ ['--i' as string]: i }} />
       ))}
-    </motion.div>
+    </div>
   )
 }
 
 export function ScreenEffects() {
   const playing = useFx((s) => s.playing)
   return createPortal(
-    <AnimatePresence>
-      {playing && (
-        <motion.div key={playing.key} className="fx-layer" initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} aria-hidden>
+    playing && (
+        <div key={playing.key} className="fx-layer" aria-hidden>
           {playing.effect === 'echo' && <Echo text={playing.text} />}
           {playing.effect === 'spotlight' && <Spotlight msgId={playing.msgId} />}
           {playing.effect === 'balloons' && <Balloons />}
           {playing.effect === 'love' && <Love msgId={playing.msgId} />}
           {playing.effect === 'lasers' && <Lasers />}
-          {playing.effect === 'fireworks' && <motion.div className="absolute inset-0 bg-black" initial={{ opacity: 0 }} animate={{ opacity: [0, 0.75, 0.75, 0] }} transition={{ duration: 4, times: [0, 0.1, 0.85, 1] }} />}
-        </motion.div>
-      )}
-    </AnimatePresence>,
+          {playing.effect === 'fireworks' && <div className="fx-dim fx-night" />}
+        </div>
+      ),
     document.body,
   )
 }

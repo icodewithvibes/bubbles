@@ -7,7 +7,7 @@ import { useRef, type ReactNode } from 'react'
 import { closeModal, get, openModal } from '@/store'
 import { Ic } from './ui'
 
-export const APP_VERSION = '2.3.0'
+export const APP_VERSION = '2.3.1'
 
 interface Note {
   icon: string
@@ -91,10 +91,7 @@ function GlowCard({ note, i }: { note: Note; i: number }) {
     <motion.div
       ref={ref}
       className={`wn-card ${note.wide ? 'wide' : ''}`}
-      style={{ ['--h' as string]: note.hue }}
-      initial={{ opacity: 0, y: 14, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ delay: 0.12 + i * 0.07, type: 'spring', stiffness: 260, damping: 24 }}
+      style={{ ['--h' as string]: note.hue, animationDelay: `${0.1 + i * 0.06}s` }}
       onPointerMove={(e) => {
         const el = ref.current
         if (!el) return
@@ -116,9 +113,7 @@ function WhatsNew() {
       className="modal wn"
       role="dialog"
       aria-modal="true"
-      initial={{ opacity: 0, y: 24, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 26 }}
+
     >
       <div className="wn-hero">
         <div className="wn-aurora" aria-hidden />

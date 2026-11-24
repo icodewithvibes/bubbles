@@ -905,3 +905,12 @@ export function watchForUpdates() {
 
 /** Sender swaps a pending upload for the finished file (or marks it failed). */
 export const setMedia = (chatId: string, msgId: string, media: Message['media']) => updateDoc(msgRef(chatId, msgId), { media })
+
+/**
+ * Read the latest messages once, without opening the chat: no listener, no
+ * route change, and never touches lastRead, so the sender sees no read receipt.
+ */
+export async function peekMessages(chatId: string, n = 25): Promise<Message[]> {
+  const snap = await getDocs(query(msgsCol(chatId), orderBy('createdAt', 'desc'), limit(n)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }) as Message).reverse()
+}

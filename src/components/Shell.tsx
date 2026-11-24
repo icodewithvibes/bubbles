@@ -15,6 +15,7 @@ import type { Chat } from '@/lib/types'
 import { N, enableNotifications, markRead, setStatus, toggleMute } from '@/services/session'
 import { set, useStore } from '@/store'
 import { openCompose, openSettings, pickAvatar } from './Dialogs'
+import { usePeek } from './Peek'
 import { Avatar, ChatAvatar, Ic, Logo, Moon, openMenu } from './ui'
 
 const pref = (k: string, d: string) => {
@@ -74,8 +75,11 @@ export function Rail() {
 function ChatRow({ c, active }: { c: Chat; active: boolean }) {
   const typing = typers(c)
   const lm = c.lastMessage
+  const peek = usePeek(c)
   return (
+    <>
     <a
+      {...peek.bind}
       className={`chat-row ${active ? 'active' : ''} ${isUnread(c) ? 'unread' : ''}`}
       href={`#/chat/${c.id}`}
       onContextMenu={(e) => {
@@ -118,6 +122,8 @@ function ChatRow({ c, active }: { c: Chat; active: boolean }) {
         </span>
       </span>
     </a>
+    {peek.card}
+    </>
   )
 }
 

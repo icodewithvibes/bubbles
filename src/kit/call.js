@@ -162,7 +162,7 @@ function newCall(c) {
     ...c, status: 'calling', pc: null, dc: null, local: null, remote: new MediaStream(),
     unsubs: [], timers: [], created: false, answered: false, startedAt: 0,
     localCands: [], remoteCands: [], micOn: true, camOn: true, ccOn: pref('cc') !== 'off',
-    peerMic: true, peerCam: true, peerCC: true, captions: new Map(), rec: null,
+    peerMic: true, peerCam: true, peerCC: true, captions: new Map(), rec: null, typing: pref('ccMode') === 'type', typeId: '',
     corner: ['tl', 'tr', 'bl', 'br'].includes(pref('pip')) ? pref('pip') : 'br',
   };
 }
@@ -320,7 +320,7 @@ function wireChannel(dc) {
     let m;
     try { m = JSON.parse(e.data); } catch { return; }
     if (!call) return;
-    if (m.k === 'cap') showCaption('them', m.id, String(m.text || '').slice(0, 500), !!m.final);
+    if (m.k === 'cap') showCaption('them', m.id, String(m.text || '').slice(0, 500), !!m.final, !!m.typed);
     else if (m.k === 'state') {
       Object.assign(call, { peerMic: !!m.mic, peerCam: !!m.cam, peerCC: !!m.cc });
       if (!m.mic) showCaption('them', 'muted', '', true);
@@ -333,7 +333,7 @@ const send = (m) => { if (call?.dc?.readyState === 'open') call.dc.send(JSON.str
 const sendState = () => send({ k: 'state', mic: call.micOn, cam: call.camOn, cc: !!SR && !call.ccBroken });
 
 async function startCaptions() {
-  if (!call || call.rec || !call.micOn) return;
+  if (!call || call.rec || !call.micOn || call.typing) return;
   if (!SR) return;
   const c = call;
   const rec = new SR();
@@ -375,7 +375,7 @@ async function startCaptions() {
   };
   // Recognition stops after a pause or about a minute; restart it so captions never go quiet.
   rec.onend = () => {
-    if (call !== c || c.rec !== rec || rec.dead || !c.micOn) { if (c.rec === rec) c.rec = null; return; }
+    if (call !== c || c.rec !== rec || rec.dead || !c.micOn || c.typing) { if (c.rec === rec) c.rec = null; return; }
     rec.restarts = (rec.restarts || 0) + 1;
     setTimeout(() => listen(), rec.restarts > 20 ? 1500 : 150);
   };
@@ -406,11 +406,11 @@ function stopCaptions(c = call) {
 }
 
 // Up to two recent lines per person; the line still being spoken updates in place.
-function showCaption(who, id, text, final) {
+function showCaption(who, id, text, final, typed = false) {
   const lines = call.captions;
   const key = `${who}:${id}`;
   if (!text) { for (const k of [...lines.keys()]) if (k.startsWith(`${who}:`) && !lines.get(k).final) lines.delete(k); }
-  else lines.set(key, { who, text, final, at: Date.now() });
+  else lines.set(key, { who, text, final, typed, at: Date.now() });
   const mine = [...lines.keys()].filter((k) => k.startsWith(`${who}:`));
   while (mine.length > 2) lines.delete(mine.shift());
   renderCaptions();
@@ -421,7 +421,7 @@ function showCaption(who, id, text, final) {
 function pruneCaptions() {
   if (!call) return;
   const now = Date.now();
-  for (const [k, l] of call.captions) if (now - l.at > (l.final ? CAPTION_HOLD : CAPTION_HOLD * 2)) call.captions.delete(k);
+  for (const [k, l] of call.captions) if (now - l.at > (l.typed ? CAPTION_HOLD * 2 : l.final ? CAPTION_HOLD : CAPTION_HOLD * 2)) call.captions.delete(k);
   renderCaptions();
   if (call.captions.size) call.capTimer = setTimeout(pruneCaptions, 1000);
 }
@@ -446,6 +446,28 @@ function toggleCam() {
   sendState();
   renderCall();
 }
+
+// Type instead of talk: what you type shows on their screen live, letter by letter,
+// and Enter posts it as a finished line. Voice captions pause while typing.
+function toggleType() {
+  call.typing = !call.typing;
+  setPref('ccMode', call.typing ? 'type' : 'voice');
+  if (call.typing) stopCaptions();
+  else { clearTyped(); startCaptions(); }
+  renderCall();
+  if (call.typing) setTimeout(() => $('#callType input')?.focus(), 0);
+}
+
+function sendTyped(text, final) {
+  if (!call) return;
+  if (!call.typeId) call.typeId = `t${Date.now()}`;
+  const id = call.typeId;
+  text = text.slice(0, 500);
+  send({ k: 'cap', id, text, final, typed: true });
+  showCaption('me', id, text, final, true);
+  if (final || !text) call.typeId = '';
+}
+function clearTyped() { if (call?.typeId) sendTyped('', false); }
 
 function toggleCC() {
   call.ccOn = !call.ccOn;
@@ -518,11 +540,26 @@ function renderCall() {
       <header class="call-top"><b id="callName"></b><span id="callStatus"></span></header>
       <video id="callLocal" class="call-local" autoplay playsinline muted></video>
       <div class="call-cc" id="callCC" aria-live="polite"></div>
+      <form class="call-type" id="callType" hidden autocomplete="off">
+        <input maxlength="500" placeholder="Type to talk… they see it as you type" aria-label="Type what you want to say" enterkeyhint="send" />
+        <button type="submit" class="call-type-send" aria-label="Send">${I.up}</button>
+      </form>
       <div class="call-bar" id="callBar"></div>`;
     el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-call]');
       if (!b || !call) return;
-      ({ mic: toggleMic, cam: toggleCam, cc: toggleCC, end: () => hangUp(call.answered ? 'ended' : 'missed') })[b.dataset.call]?.();
+      ({ mic: toggleMic, cam: toggleCam, cc: toggleCC, type: toggleType, end: () => hangUp(call.answered ? 'ended' : 'missed') })[b.dataset.call]?.();
+    });
+    const form = $('#callType', el);
+    const input = $('input', form);
+    input.addEventListener('input', () => sendTyped(input.value.trim() ? input.value : '', false));
+    input.addEventListener('keydown', (e) => { if (e.key === 'Escape') toggleType(); });
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (text) sendTyped(text, true);
+      input.value = '';
+      input.focus();
     });
     $('#callRoot').append(el);
     if (call.local) $('#callLocal').srcObject = call.local;
@@ -541,6 +578,9 @@ function renderCall() {
   $('#callPeer').innerHTML = showPeer
     ? `${avatar(u, 120)}${live && !call.peerMic ? `<span class="call-flag">${I.micOff} Muted</span>` : ''}` : '';
   $('#callRemote').hidden = !live || showPeer;
+  const typeBar = $('#callType');
+  typeBar.hidden = !(call.typing && live);
+  el.classList.toggle('typing', !typeBar.hidden);
   renderStatus();
   renderControls();
   renderCaptions();
@@ -590,6 +630,7 @@ function renderControls() {
   bar.innerHTML = `
     <button class="call-btn ${call.micOn ? '' : 'off'}" data-call="mic" title="${call.micOn ? 'Mute' : 'Unmute'}" aria-pressed="${!call.micOn}">${call.micOn ? I.mic : I.micOff}</button>
     <button class="call-btn ${call.camOn ? '' : 'off'}" data-call="cam" title="${call.camOn ? 'Turn camera off' : 'Turn camera on'}" aria-pressed="${!call.camOn}">${call.camOn ? I.video : I.videoOff}</button>
+    <button class="call-btn ${call.typing ? 'on' : ''}" data-call="type" title="${call.typing ? 'Back to voice captions' : 'Type instead of talking'}" aria-pressed="${call.typing}">${I.keyboard}</button>
     <button class="call-btn ${call.ccOn ? 'on' : ''}" data-call="cc" title="${call.ccOn ? 'Hide captions' : 'Show captions'}" aria-pressed="${call.ccOn}">${I.cc}</button>
     <button class="call-btn end" data-call="end" title="${call.answered ? 'End call' : 'Cancel'}">${I.phoneOff}</button>`;
 }
@@ -598,13 +639,17 @@ function renderCaptions() {
   const box = $('#callCC');
   if (!box || !call) return;
   const live = call.status === 'active' || call.status === 'reconnecting';
-  box.hidden = !call.ccOn || !live;
+  const all = [...call.captions.values()];
+  const anyTyped = all.some((l) => l.typed);
+  box.hidden = !live || (!call.ccOn && !anyTyped);
   if (box.hidden) return;
-  const lines = [...call.captions.values()].sort((a, b) => a.at - b.at).slice(-3);
+  const lines = (call.ccOn ? all : all.filter((l) => l.typed)).sort((a, b) => a.at - b.at).slice(-3);
   let note = '';
-  if (!SR) note = 'Your browser can\'t make captions of your voice. Chrome or Edge can.';
+  if (call.typing) note = '';
+  else if (!call.ccOn) note = '';
+  else if (!SR) note = 'Your browser can\'t make captions of your voice. Chrome or Edge can.';
   else if (!call.peerCC) note = `${esc(ctx.user(call.peer).displayName || 'They')}'s browser can't make captions. Chrome or Edge can.`;
   box.innerHTML = lines.length || note
-    ? `${lines.map((l) => `<p class="cc-line ${l.who} ${l.final ? '' : 'interim'}"><b>${l.who === 'me' ? 'You' : esc(ctx.user(call.peer).displayName || 'Them')}</b> ${esc(l.text)}</p>`).join('')}${note ? `<p class="cc-note">${note}</p>` : ''}`
-    : '<p class="cc-note">Captions are on. Start talking.</p>';
+    ? `${lines.map((l) => `<p class="cc-line ${l.who} ${l.final ? '' : 'interim'} ${l.typed ? 'typed' : ''}"><b>${l.typed ? '⌨︎ ' : ''}${l.who === 'me' ? 'You' : esc(ctx.user(call.peer).displayName || 'Them')}</b> ${esc(l.text)}</p>`).join('')}${note ? `<p class="cc-note">${note}</p>` : ''}`
+    : `<p class="cc-note">${call.typing ? 'Type below. They see your words as you type.' : 'Captions are on. Start talking.'}</p>`;
 }
