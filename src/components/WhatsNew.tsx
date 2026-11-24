@@ -7,7 +7,7 @@ import { useRef, type ReactNode } from 'react'
 import { closeModal, get, openModal } from '@/store'
 import { Ic } from './ui'
 
-export const APP_VERSION = '2.3.1'
+export const APP_VERSION = '2.3.0'
 
 interface Note {
   icon: string
